@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LinkedIn Feed Scroller</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <div class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 40 40" width="32" height="32" fill="none">
+          <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2.5" />
+          <path d="M20 9v18m0 0 7-7m-7 7-7-7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="brand-copy">
+        <p class="eyebrow">LINKEDIN FEED TOOL</p>
+        <h1>Feed Assistant</h1>
+      </div>
+      <span id="connectionChip" class="connection-chip">CHECKING</span>
+    </header>
+
+    <section class="target-card" aria-label="Monitored LinkedIn tab">
+      <div class="target-heading">
+        <span id="targetBadge" class="target-badge">NO FEED SELECTED</span>
+        <span id="targetDetail" class="target-detail">Choose a LinkedIn feed tab. The selected target is remembered when you reopen this popup.</span>
+      </div>
+      <div class="target-actions">
+        <button id="useActiveFeedBtn" class="button button-secondary target-button" type="button">Use active feed tab</button>
+        <button id="returnToFeedBtn" class="button button-secondary target-button" type="button" disabled>Return to feed</button>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist" aria-label="Extension sections">
+      <button id="scrollTab" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="scrollView">Scroll</button>
+      <button id="hiringTab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="hiringView">Hiring filter <span id="tabMatchCount" class="tab-count">0</span></button>
+    </nav>
+
+    <p id="globalNotice" class="global-notice" role="status">Open the LinkedIn feed to begin.</p>
+
+    <section id="scrollView" class="view active" role="tabpanel" aria-labelledby="scrollTab">
+      <section class="status-card" aria-live="polite">
+        <div class="status-heading">
+          <div class="state-wrap">
+            <span id="stateDot" class="state-dot"></span>
+            <span id="stateLabel" class="state-label">READY</span>
+          </div>
+          <span id="modeTag" class="mode-tag">Human-like Standard</span>
+        </div>
+        <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+        <p id="statusDetail" class="status-detail">Ready to scroll the LinkedIn feed.</p>
+      </section>
+
+      <section class="scroll-controls" aria-label="Scrolling controls">
+        <button id="startBtn" class="button button-primary" type="button" disabled>Start scrolling</button>
+        <div class="button-row">
+          <button id="pauseBtn" class="button button-secondary" type="button" disabled>Pause</button>
+          <button id="stopBtn" class="button button-stop" type="button" disabled>Stop</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="paceTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">ADAPTIVE SCROLL</p>
+            <h2 id="paceTitle">Smart pacing</h2>
+          </div>
+          <span id="safeBadge" class="safe-badge">AUTO-ADAPTIVE</span>
+        </div>
+
+        <label class="field-label" for="modeSelect">Human-like mode</label>
+        <select id="modeSelect" class="select-control">
+          <option value="standard">Human-like Standard</option>
+          <option value="fast">Human-like Fast</option>
+          <option value="super_fast">Human-like Super Fast</option>
+        </select>
+        <p id="modeDescription" class="field-help">Adaptive movement and pauses are automatic. The selected feed keeps scrolling in the background; Chrome may throttle hidden tabs.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="limitsTitle">
+        <div class="panel-heading compact-heading">
+          <div>
+            <p class="section-kicker">SESSION GUARDRAILS</p>
+            <h2 id="limitsTitle">Limits & safeguards</h2>
+          </div>
+        </div>
+        <div class="two-fields">
+          <div>
+            <label class="field-label" for="maxMinutes">Time limit</label>
+            <select id="maxMinutes" class="select-control">
+              <option value="5">5 minutes</option>
+              <option value="15" selected>15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="maxSteps">Step limit</label>
+            <select id="maxSteps" class="select-control">
+              <option value="40">40 steps</option>
+              <option value="80">80 steps</option>
+              <option value="120">120 steps</option>
+              <option value="180" selected>180 steps</option>
+              <option value="300">300 steps</option>
+              <option value="500">500 steps</option>
+            </select>
+          </div>
+        </div>
+        <div class="toggle-list">
+          <label class="toggle-row" for="pauseOnInput">
+            <span><strong>Pause on my input</strong><small>Pause when you use the page.</small></span>
+            <input id="pauseOnInput" type="checkbox" checked>
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+    </section>
+
+    <section id="hiringView" class="view" role="tabpanel" aria-labelledby="hiringTab" hidden>
+      <section class="panel detector-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">LOCAL DETECTION</p>
+            <h2>Recruiting & hiring</h2>
+          </div>
+          <span class="local-badge">NO AI</span>
+        </div>
+        <p class="detector-copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French, and Arabic while it is in the background. Chrome may throttle hidden tabs, and the feed tab must stay open.</p>
+        <label class="toggle-row auto-expand-row" for="autoExpand">
+          <span><strong>Auto-expand visible long posts</strong><small>Only while the hiring monitor is running.</small></span>
+          <input id="autoExpand" type="checkbox" checked>
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <button id="monitorBtn" class="button button-monitor" type="button" disabled>Start hiring monitor</button>
+        <p id="monitorStatus" class="monitor-status" role="status">Monitor is off.</p>
+        <p id="domHealthStatus" class="dom-health" role="status">Feed DOM check pending.</p>
+        <div class="history-controls">
+          <label class="toggle-row history-toggle" for="keepHistory">
+            <span><strong>Keep local post history</strong><small>Opt-in: stores post text on this device; off by default.</small></span>
+            <input id="keepHistory" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <div class="history-actions">
+            <label class="field-label" for="historyRetention">Retention</label>
+            <select id="historyRetention" class="select-control">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+            <button id="clearHistoryBtn" class="button button-secondary clear-history-btn" type="button" disabled>Clear saved history</button>
+          </div>
+          <p id="historyStatus" class="history-status">Local history is off.</p>
+        </div>
+        <div class="metric-grid" aria-label="Detected post counts">
+          <div class="metric"><strong id="openCount">0</strong><span>Openings</span></div>
+          <div class="metric"><strong id="recruiterCount">0</strong><span>Recruiter searches</span></div>
+          <div class="metric"><strong id="possibleCount">0</strong><span>Possible</span></div>
+          <div class="metric"><strong id="relatedCount">0</strong><span>Other related</span></div>
+        </div>
+        <p class="local-note">Local keyword/context rules only. Review labels are private notes and never change detection; no role-title dictionary, uploads, or AI calls.</p>
+      </section>
+
+      <section class="panel results-panel" aria-labelledby="resultsTitle">
+        <div class="results-heading">
+          <div>
+            <p class="section-kicker">LIVE RESULTS</p>
+            <h2 id="resultsTitle">Detected posts</h2>
+          </div>
+          <button id="exportBtn" class="button button-secondary export-btn" type="button" disabled>Export JSON</button>
+        </div>
+        <label class="filter-label" for="categoryFilter">Filter results</label>
+        <select id="categoryFilter" class="select-control filter-select">
+          <option value="all">All detected</option>
+          <option value="open_role">Openings</option>
+          <option value="recruiter_search">Recruiter searches</option>
+          <option value="possible">Possible matches</option>
+          <option value="job_seeker">Job seekers / referrals</option>
+          <option value="hiring_discussion">Hiring advice / news</option>
+          <option value="closed">Closed / negative</option>
+          <option value="partial">Partial text</option>
+        </select>
+        <div class="export-options">
+          <div class="export-format-row">
+            <label class="field-label" for="exportFormat">File format</label>
+            <select id="exportFormat" class="select-control export-format-select">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          <label class="toggle-row export-filter-toggle" for="exportFilteredOnly">
+            <span><strong>Export selected category only</strong><small>Uses the category filter above; off exports all detections.</small></span>
+            <input id="exportFilteredOnly" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <details class="export-field-options">
+            <summary>Choose fields to include</summary>
+            <div class="field-check-grid">
+              <label><input id="includeFullText" type="checkbox" checked> Full post text</label>
+              <label><input id="includeEmails" type="checkbox" checked> Email addresses</label>
+              <label><input id="includeJobTitles" type="checkbox" checked> Job-title candidates</label>
+              <label><input id="includeMetrics" type="checkbox" checked> Age and metrics</label>
+              <label><input id="includePostMetadata" type="checkbox" checked> Author, links, hashtags</label>
+            </div>
+          </details>
+        </div>
+        <label class="toggle-row feed-filter-toggle" for="matchesOnly">
+          <span><strong>Show selected matches in feed only</strong><small>While monitoring; stop to restore. Uncertain or partial posts stay visible.</small></span>
+          <input id="matchesOnly" type="checkbox">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p id="processedDetail" class="processed-detail">Start the monitor to scan posts as you browse.</p>
+        <p id="exportStatus" class="export-status">User-initiated local JSON or CSV. Choose fields and optionally export only the selected category.</p>
+        <div id="matchList" class="match-list" aria-live="polite">
+          <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">⌕</span>
+            <strong>No posts scanned yet</strong>
+            <span>Start the monitor to detect likely hiring posts.</span>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <footer class="app-footer">
+    <span>Selected feed stays pinned when you switch tabs</span>
+    <span>Local only</span>
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
