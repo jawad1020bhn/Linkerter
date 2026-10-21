@@ -55,3 +55,11 @@ Local history is **off by default**. When enabled, detected post records (includ
 The extension makes no analytics or external service requests. Hiring results and the current run’s export archive are held in page memory; persistent post history is only saved when you opt in. Select **Stop hiring monitor** to stop scanning and restore any temporarily hidden feed cards. Scrolling and scanning continue in the selected hidden LinkedIn tab while it remains open, subject to Chrome background throttling. Human-like Super Fast locks pause-on-input on.
 
 Use responsibly and follow LinkedIn’s applicable terms and policies. LinkedIn may change its page structure or button labels, so DOM-dependent monitoring and expansion can require maintenance.
+
+## Development workflow (Superpowers)
+
+This repository includes a full in-repo installation of **[obra/superpowers](https://github.com/obra/superpowers)** (`v7.0.0`) configured across `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `opencode.json`, `.agents/skills/`, `.claude/skills/`, and `.agents/superpowers/`.
+
+- **Specs & plans:** `docs/superpowers/specs/` and `docs/superpowers/plans/` (see [`docs/superpowers/README.md`](docs/superpowers/README.md) for full workflow documentation).
+- **Verify Superpowers & extension integrity:** `bash scripts/verify-superpowers.sh`
+- **Build clean extension archive (`linkedin-feed-scroller.zip`):** `bash scripts/package-extension.sh`
