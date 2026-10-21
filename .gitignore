@@ -1,0 +1,19 @@
+# Superpowers runtime workspaces (ephemeral per session / plan)
+.superpowers/
+.worktrees/
+worktrees/
+
+# Local developer & editor settings
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+
+# Node / Python caches & test dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Built extension archive
+linkedin-feed-scroller.zip
