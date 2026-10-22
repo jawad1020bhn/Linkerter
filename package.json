@@ -7,7 +7,9 @@
     "test": "node --test tests/unit/*.test.js tests/integration/*.test.js tests/dom/*.test.js",
     "test:unit": "node --test tests/unit/*.test.js",
     "test:classifier": "node scripts/evaluate-classifier.js",
-    "test:browser": "bash scripts/test-browser.sh"
+    "test:browser": "bash scripts/test-browser.sh",
+    "probe:classifier": "node scripts/probe-classifier.js",
+    "probe:feed": "node scripts/probe-feed-roots.js"
   },
   "engines": {
     "node": ">=22"

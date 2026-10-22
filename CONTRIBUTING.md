@@ -9,9 +9,13 @@ Use Node.js 22 or newer and Python 3 for release packaging:
 ```sh
 npm ci
 npm test
+npm run probe:classifier -- --strict
+npm run probe:feed -- --strict
 bash scripts/verify-superpowers.sh
 node --test tests/integration/package.test.js
 ```
+
+`npm run probe:classifier` reports per-category precision and recall over the labeled corpus in `tests/fixtures/classifier/`; `npm run probe:feed` proves that one realistic LinkedIn card yields one post root, one archive record, and no page chrome in the extracted text. Both are measurement tools by default and gates with `--strict`; CI runs them strict. When you change a rule, a threshold, or root selection, run both and read the mismatch list before tuning anything else.
 
 The npm packages are development-only test tools. Do not add them to the extension runtime or manifest.
 

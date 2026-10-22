@@ -128,7 +128,9 @@ let activeRefreshGeneration = null;
 let stateGeneration = 0;
 let scrollGeneration = 0;
 let detailGeneration = 0;
-const resultQuery = { filter: "all", search: "", sort: "newest", page: 1, pageSize: 25 };
+// "relevance" keeps active openings ahead of secondary categories without hiding any of them.
+const RESULT_SORTS = ["relevance", "newest", "oldest"];
+const resultQuery = { filter: "all", search: "", sort: "relevance", page: 1, pageSize: 25 };
 let archiveExported = false;
 let archiveAcknowledged = false;
 let lastArchiveCount = null;
@@ -926,9 +928,9 @@ async function clearAllStoredData() {
     elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
     elements.historyRetention.value = "30";
-    Object.assign(resultQuery, { filter: "all", search: "", sort: "newest", page: 1, pageSize: 25 });
+    Object.assign(resultQuery, { filter: "all", search: "", sort: "relevance", page: 1, pageSize: 25 });
     elements.resultSearch.value = "";
-    elements.resultSort.value = "newest";
+    elements.resultSort.value = "relevance";
     renderTargetState();
     renderHiringStatus({ supported: false, isFeed: false, monitoring: false, counts: {}, processedCount: 0, archiveCount: 0 });
     applyPopupLocale();
@@ -1119,9 +1121,9 @@ async function initialize() {
     reviewLabels = new Map();
     elements.autoExpand.checked = true;
     elements.categoryFilter.value = "all";
-    Object.assign(resultQuery, { filter: "all", search: "", sort: "newest", page: 1, pageSize: 25 });
+    Object.assign(resultQuery, { filter: "all", search: "", sort: "relevance", page: 1, pageSize: 25 });
     elements.resultSearch.value = "";
-    elements.resultSort.value = "newest";
+    elements.resultSort.value = "relevance";
     elements.matchesOnly.checked = false;
     elements.exportFormat.value = "json";
     elements.exportFilteredOnly.checked = false;
@@ -1222,7 +1224,7 @@ async function initialize() {
     void updateResultQuery({ search: elements.resultSearch.value, page: 1 });
   });
   elements.resultSort.addEventListener("change", () => {
-    void updateResultQuery({ sort: elements.resultSort.value === "oldest" ? "oldest" : "newest", page: 1 });
+    void updateResultQuery({ sort: RESULT_SORTS.includes(elements.resultSort.value) ? elements.resultSort.value : "relevance", page: 1 });
   });
   elements.previousPage.addEventListener("click", () => {
     void updateResultQuery({ page: Math.max(1, resultQuery.page - 1) });

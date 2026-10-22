@@ -236,6 +236,9 @@ p { overflow-wrap: anywhere; }
 .match-snippet { margin: 8px 0 0; color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
 .match-evidence { margin: 6px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .partial-note { display: inline-block; margin-top: 6px; color: var(--amber-ink); font-size: 12px; font-weight: 700; }
+.match-age { margin-inline-start: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.match-item.stale { border-inline-start: 3px solid #a76b0b; }
+.stale-note { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; background: var(--amber); color: var(--amber-ink); font-size: 12px; font-weight: 700; }
 .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .original-post-link { display: inline-flex; align-items: center; min-height: 40px; color: var(--teal-dark); font-size: 13px; font-weight: 700; }
 .review-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }

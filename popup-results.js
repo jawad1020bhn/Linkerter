@@ -114,6 +114,31 @@
       item.querySelector(".match-evidence").after(partialNote);
     } else if (!partial && partialNote) partialNote.remove();
 
+    // Age is shown only when the page exposed it, so a missing timestamp is never guessed.
+    // A stale marker keeps months-old openings visibly separate from current ones.
+    const ageLabel = post?.postAge?.label || null;
+    const stale = post?.stale === true && Boolean(ageLabel);
+    item.classList.toggle("stale", stale);
+    let ageNode = item.querySelector(".match-age");
+    if (ageLabel) {
+      if (!ageNode) {
+        ageNode = item.ownerDocument.createElement("span");
+        ageNode.className = "match-age";
+        item.querySelector(".match-topline").append(ageNode);
+      }
+      setText(ageNode, t("results.postedAge", { age: ageLabel }));
+    } else if (ageNode) ageNode.remove();
+
+    let staleNote = item.querySelector(".stale-note");
+    if (stale) {
+      if (!staleNote) {
+        staleNote = item.ownerDocument.createElement("span");
+        staleNote.className = "stale-note";
+        item.querySelector(".match-evidence").after(staleNote);
+      }
+      setText(staleNote, t("results.staleNote"));
+    } else if (staleNote) staleNote.remove();
+
     const actions = item.querySelector(".result-actions");
     let link = actions.querySelector(".original-post-link");
     const expectedHref = shared.canonicalizeLinkedInUrl(post.permalink, "permalink");
