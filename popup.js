@@ -1,3 +1,10 @@
+const shared = globalThis.__LI_FEED_SHARED__;
+const i18n = globalThis.__LI_FEED_I18N__;
+const exporter = globalThis.__LI_FEED_EXPORT__;
+const resultsRenderer = globalThis.__LI_FEED_RESULTS__;
+if (!shared || !i18n || !exporter || !resultsRenderer) throw new Error("Popup helpers must load before the popup controller.");
+const t = (key, substitutions) => i18n.t(key, substitutions);
+
 const DEFAULT_SETTINGS = {
   mode: "standard",
   maxMinutes: 15,
@@ -11,34 +18,28 @@ const DEFAULT_HIRING_PREFS = {
   matchesOnly: false,
   exportFormat: "json",
   exportFilteredOnly: false,
-  includeFullText: true,
-  includeEmails: true,
+  includeFullText: false,
+  includeEmails: false,
   includeJobTitles: true,
   includeMetrics: true,
   includePostMetadata: true,
   keepHistory: false,
-  historyRetentionDays: 30
+  historyMode: "off",
+  historyRetentionDays: 30,
+  locale: "auto",
+  onboardingSeen: false
 };
 const MODE_NAMES = {
-  standard: "Human-like Standard",
-  fast: "Human-like Fast",
-  super_fast: "Human-like Super Fast"
+  standard: "mode.standard",
+  fast: "mode.fast",
+  super_fast: "mode.super_fast"
 };
 const MODE_DESCRIPTIONS = {
-  standard: "Balanced adaptive movement with automatic reading pauses. The selected feed continues scrolling while hidden; Chrome may throttle it.",
-  fast: "Quicker adaptive movement with variable waits and built-in reading pauses. Background scrolling continues while the selected feed is open.",
-  super_fast: "Highest adaptive pace, with automatic reading pauses, a 15-minute / 120-step cap, and pause-on-input locked on."
+  standard: "mode.standardDescription",
+  fast: "mode.fastDescription",
+  super_fast: "mode.super_fastDescription"
 };
-const CATEGORY_NAMES = {
-  open_role: "Openings",
-  recruiter_search: "Recruiter search",
-  possible: "Possible match",
-  job_seeker: "Job seeker / referral",
-  hiring_discussion: "Hiring advice / news",
-  closed: "Closed / negative",
-  partial: "Partial text"
-};
-const FILTERS = ["all", ...Object.keys(CATEGORY_NAMES)];
+const FILTERS = shared.FILTERS;
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -47,6 +48,9 @@ const elements = {
   scrollView: $("#scrollView"),
   hiringView: $("#hiringView"),
   connectionChip: $("#connectionChip"),
+  localeSelect: $("#localeSelect"),
+  onboarding: $("#onboarding"),
+  onboardingDismiss: $("#onboardingDismiss"),
   globalNotice: $("#globalNotice"),
   targetBadge: $("#targetBadge"),
   targetDetail: $("#targetDetail"),
@@ -74,10 +78,19 @@ const elements = {
   monitorStatus: $("#monitorStatus"),
   domHealthStatus: $("#domHealthStatus"),
   keepHistory: $("#keepHistory"),
+  historyMode: $("#historyMode"),
   historyRetention: $("#historyRetention"),
   clearHistoryBtn: $("#clearHistoryBtn"),
+  clearAllDataBtn: $("#clearAllDataBtn"),
+  diagnosticBtn: $("#diagnosticBtn"),
   historyStatus: $("#historyStatus"),
   categoryFilter: $("#categoryFilter"),
+  resultSearch: $("#resultSearch"),
+  resultSort: $("#resultSort"),
+  previousPage: $("#previousPage"),
+  nextPage: $("#nextPage"),
+  pageStatus: $("#pageStatus"),
+  postDetail: $("#postDetail"),
   exportFormat: $("#exportFormat"),
   exportFilteredOnly: $("#exportFilteredOnly"),
   includeFullText: $("#includeFullText"),
@@ -105,9 +118,22 @@ let scrollStatus = null;
 let hiringStatus = null;
 let hiringPrefs = { ...DEFAULT_HIRING_PREFS };
 let savedHistory = [];
+let savedHistoryStats = { bytes: 0, stores: {}, lastSuccessfulSaveAt: null, limitReached: false, error: null };
 let reviewLabels = new Map();
 let refreshTimer = null;
 let saveTimer = null;
+let refreshPromise = null;
+let refreshQueued = false;
+let activeRefreshGeneration = null;
+let stateGeneration = 0;
+let scrollGeneration = 0;
+let detailGeneration = 0;
+const resultQuery = { filter: "all", search: "", sort: "newest", page: 1, pageSize: 25 };
+let archiveExported = false;
+let archiveAcknowledged = false;
+let lastArchiveCount = null;
+const pendingScrollCommands = new Set();
+const pendingMonitorCommands = new Set();
 
 let lastModeWasSuperFast = false;
 let preSuperFastSafety = { pauseOnInput: true };
@@ -200,9 +226,24 @@ function applySettings(raw) {
 
 function updateSettingLabels() {
   const mode = elements.mode.value;
-  elements.modeDescription.textContent = MODE_DESCRIPTIONS[mode] || MODE_DESCRIPTIONS.standard;
-  elements.modeTag.textContent = MODE_NAMES[mode] || MODE_NAMES.standard;
-  elements.safeBadge.textContent = mode === "super_fast" ? "LOCKED GUARDRAILS" : "SMART ALGORITHM";
+  elements.modeDescription.textContent = t(MODE_DESCRIPTIONS[mode] || MODE_DESCRIPTIONS.standard);
+  elements.modeTag.textContent = t(MODE_NAMES[mode] || MODE_NAMES.standard);
+  elements.safeBadge.textContent = t(mode === "super_fast" ? "pace.locked" : "pace.smart");
+}
+
+function applyPopupLocale() {
+  const requested = ["auto", "en", "fr", "ar"].includes(hiringPrefs.locale) ? hiringPrefs.locale : "auto";
+  i18n.setLocale(requested);
+  i18n.applyLocale(document);
+  elements.localeSelect.value = requested;
+  elements.onboarding.hidden = Boolean(hiringPrefs.onboardingSeen);
+  updateSettingLabels();
+  if (hiringStatus) renderHiringStatus(hiringStatus);
+  else {
+    elements.monitorBtn.textContent = t("monitor.start");
+    elements.pageStatus.textContent = t("results.page", { page: resultQuery.page, count: 0 });
+  }
+  renderHistoryStatus();
 }
 
 async function saveSettings() {
@@ -223,8 +264,11 @@ function readHiringPrefs() {
     includeJobTitles: elements.includeJobTitles.checked,
     includeMetrics: elements.includeMetrics.checked,
     includePostMetadata: elements.includePostMetadata.checked,
-    keepHistory: elements.keepHistory.checked,
-    historyRetentionDays: [7, 30, 90].includes(requestedRetention) ? requestedRetention : 30
+    historyMode: ["off", "session", "persistent"].includes(elements.historyMode.value) ? elements.historyMode.value : "off",
+    keepHistory: elements.historyMode.value !== "off",
+    historyRetentionDays: [7, 30, 90].includes(requestedRetention) ? requestedRetention : 30,
+    locale: ["auto", "en", "fr", "ar"].includes(elements.localeSelect.value) ? elements.localeSelect.value : "auto",
+    onboardingSeen: Boolean(hiringPrefs?.onboardingSeen)
   };
 }
 
@@ -235,11 +279,13 @@ async function saveHiringPrefs() {
 
 function monitorOptions() {
   const preferences = readHiringPrefs();
+  const historyMode = preferences.historyMode;
   return {
     autoExpand: preferences.autoExpand,
     filter: preferences.filter,
     matchesOnly: preferences.matchesOnly,
-    keepHistory: preferences.keepHistory,
+    historyMode,
+    keepHistory: historyMode !== "off",
     historyRetentionDays: preferences.historyRetentionDays
   };
 }
@@ -247,7 +293,7 @@ function monitorOptions() {
 function queueSaveSettings() {
   updateSettingLabels();
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { void saveSettings().catch(() => setGlobalNotice("Could not save settings.", "error")); }, 120);
+  saveTimer = setTimeout(() => { void saveSettings().catch(() => setGlobalNotice(t("settings.saveFailed"), "error")); }, 120);
 }
 
 function setGlobalNotice(message, kind = "") {
@@ -261,7 +307,7 @@ function sanitizeHistory(raw) {
   return (Array.isArray(raw) ? raw : [])
     .filter((record) => record && typeof record === "object" && (record.id || record.permalink))
     .sort((a, b) => Date.parse(b.lastSeenAt || b.firstSeenAt || "") - Date.parse(a.lastSeenAt || a.firstSeenAt || ""))
-    .slice(0, 500);
+    .slice(0, 1000);
 }
 
 function sanitizeReviewLabels(raw) {
@@ -279,10 +325,6 @@ function sanitizeReviewLabels(raw) {
   return new Map(entries.slice(-1000));
 }
 
-function postKey(post) {
-  return String(post?.id || post?.sourcePostId || post?.permalink || "");
-}
-
 async function persistReviewLabels() {
   const stored = Object.fromEntries(reviewLabels.entries());
   await chrome.storage.local.set({ hiringReviewLabels: stored });
@@ -290,13 +332,32 @@ async function persistReviewLabels() {
 
 function renderHistoryStatus() {
   const count = savedHistory.length;
-  if (elements.keepHistory.checked) {
-    elements.historyStatus.textContent = `On · ${count} saved post${count === 1 ? "" : "s"} · ${elements.historyRetention.value}-day retention${hiringStatus?.historyLimitReached ? " · storage cap reached" : ""}.`;
+  const mode = ["off", "session", "persistent"].includes(elements.historyMode.value) ? elements.historyMode.value : "off";
+  elements.keepHistory.checked = mode !== "off";
+  let message;
+  if (mode !== "off") {
+    message = t("history.activeStatus", {
+      store: t(mode === "session" ? "history.storeSession" : "history.storePersistent"),
+      count,
+      days: elements.historyRetention.value
+    });
   } else if (count) {
-    elements.historyStatus.textContent = `Off · ${count} previously saved post${count === 1 ? "" : "s"} remain until cleared and are still exportable.`;
+    message = t("history.previous", { count });
   } else {
-    elements.historyStatus.textContent = "Off · no post history is being saved.";
+    message = t("history.offStatus");
   }
+  if (savedHistoryStats.error) {
+    message += ` · ${t("history.unavailable")}`;
+  } else {
+    message += ` · ${t("history.usage", { bytes: Number(savedHistoryStats.bytes) || 0 })}`;
+    const savedAt = Date.parse(savedHistoryStats.lastSuccessfulSaveAt || "");
+    if (Number.isFinite(savedAt)) {
+      let formatted = savedHistoryStats.lastSuccessfulSaveAt;
+      try { formatted = new Intl.DateTimeFormat(i18n.locale, { dateStyle: "short", timeStyle: "short" }).format(new Date(savedAt)); } catch (_error) { /* ISO fallback remains readable. */ }
+      message += ` · ${t("history.lastSave", { time: formatted })}`;
+    } else message += ` · ${t("history.noSave")}`;
+  }
+  elements.historyStatus.textContent = message;
   elements.clearHistoryBtn.disabled = count === 0;
   renderButtons();
 }
@@ -310,7 +371,7 @@ function setConnection(connected, feed = false) {
   available = connected;
   isFeed = feed;
   const targetInBackground = Number.isInteger(targetTabId) && Number.isInteger(activeTabId) && targetTabId !== activeTabId;
-  elements.connectionChip.textContent = !connected ? "NOT CONNECTED" : !feed ? "OPEN FEED" : targetInBackground ? "FEED BACKGROUND" : "LINKEDIN FEED";
+  elements.connectionChip.textContent = t(!connected ? "connection.offline" : !feed ? "connection.openFeed" : targetInBackground ? "connection.background" : "connection.feed");
   elements.connectionChip.className = `connection-chip${connected && feed && !targetInBackground ? " connected" : !connected ? " error" : ""}`;
   renderTargetState();
   renderButtons();
@@ -319,14 +380,14 @@ function setConnection(connected, feed = false) {
 function renderTargetState() {
   const hasTarget = Number.isInteger(targetTabId);
   const targetIsActive = hasTarget && activeTabId === targetTabId;
-  elements.targetBadge.textContent = !hasTarget ? "NO FEED SELECTED" : targetIsActive ? "FEED TAB ACTIVE" : "FEED TAB IN BACKGROUND";
+  elements.targetBadge.textContent = t(!hasTarget ? "target.noFeed" : targetIsActive ? "target.active" : "target.background");
   elements.targetBadge.className = `target-badge${!hasTarget ? " error" : targetIsActive ? " active" : " background"}`;
   if (!hasTarget) {
-    elements.targetDetail.textContent = "Choose a LinkedIn feed tab. The target is remembered when you reopen this popup.";
+    elements.targetDetail.textContent = t("target.detail");
   } else if (targetIsActive) {
-    elements.targetDetail.textContent = "This tab is selected. Scrolling and local gathering are available.";
+    elements.targetDetail.textContent = t("target.selected");
   } else {
-    elements.targetDetail.textContent = "Scrolling and gathering continue in the background. Chrome may throttle hidden tabs; return here to interact.";
+    elements.targetDetail.textContent = t("target.backgroundDetail");
   }
   elements.useActiveFeedBtn.disabled = !Number.isInteger(activeTabId) || !isLinkedInUrl(activeTabUrl) || targetIsActive;
   elements.returnToFeedBtn.disabled = !hasTarget || targetIsActive;
@@ -339,11 +400,11 @@ async function activeTab() {
 }
 
 function isLinkedInUrl(url = "") {
-  return /^https:\/\/www\.linkedin\.com\//i.test(url);
+  return shared.parseLinkedInUrl(url).isLinkedIn;
 }
 
 function isLinkedInFeedUrl(url = "") {
-  return /^https:\/\/www\.linkedin\.com\/(?:$|feed(?:\/|$|[?#]))/i.test(url);
+  return shared.parseLinkedInUrl(url).isFeed;
 }
 
 async function writeTargetForWindow(windowId, tabId) {
@@ -357,20 +418,30 @@ async function writeTargetForWindow(windowId, tabId) {
 
 async function setTargetTab(tabId, windowId, stopPrevious = true) {
   if (!Number.isInteger(tabId)) return false;
-  const targetChanged = targetTabId !== tabId;
-  if (stopPrevious && Number.isInteger(targetTabId) && targetTabId !== tabId) {
-    try { await chrome.tabs.sendMessage(targetTabId, { type: "STOP_HIRING_MONITOR" }); } catch (_error) { /* Old target may have closed. */ }
-    try { await chrome.tabs.sendMessage(targetTabId, { type: "STOP" }); } catch (_error) { /* Old target may have closed. */ }
-  }
-  targetTabId = tabId;
-  targetWindowId = windowId;
+  const previousTabId = targetTabId;
+  const targetChanged = previousTabId !== tabId;
   if (targetChanged) {
+    stateGeneration += 1;
+    detailGeneration += 1;
+    targetTabId = tabId;
+    targetWindowId = windowId;
     scrollStatus = null;
     hiringStatus = null;
+    lastArchiveCount = null;
+    archiveExported = false;
+    archiveAcknowledged = false;
+    elements.postDetail.hidden = true;
+  } else {
+    targetTabId = tabId;
+    targetWindowId = windowId;
+  }
+  if (stopPrevious && Number.isInteger(previousTabId) && previousTabId !== tabId) {
+    try { await chrome.tabs.sendMessage(previousTabId, { type: "STOP_HIRING_MONITOR" }); } catch (_error) { /* Old target may have closed. */ }
+    try { await chrome.tabs.sendMessage(previousTabId, { type: "STOP" }); } catch (_error) { /* Old target may have closed. */ }
   }
   await writeTargetForWindow(windowId, tabId);
-  renderTargetState();
-  return true;
+  if (targetTabId === tabId) renderTargetState();
+  return targetTabId === tabId;
 }
 
 async function chooseActiveFeedTab(tab = null, quiet = false) {
@@ -378,49 +449,52 @@ async function chooseActiveFeedTab(tab = null, quiet = false) {
   activeTabId = Number.isInteger(current?.id) ? current.id : null;
   activeTabUrl = current?.url || "";
   if (!current || !Number.isInteger(current.id) || !isLinkedInUrl(activeTabUrl)) {
-    if (!quiet) setGlobalNotice("Switch to a LinkedIn feed tab, then select it here.");
+    if (!quiet) setGlobalNotice(t("notice.switchFeed"));
     renderTargetState();
     return false;
   }
   try {
     const status = await chrome.tabs.sendMessage(current.id, { type: "GET_STATUS" });
     if (!status?.isFeed) {
-      if (!quiet) setGlobalNotice("Open linkedin.com/feed/ in this tab before selecting it.");
+      if (!quiet) setGlobalNotice(t("notice.openFeedExact"));
       return false;
     }
     await setTargetTab(current.id, current.windowId);
     setConnection(true, true);
-    if (!quiet) setGlobalNotice("LinkedIn feed selected. The target remains remembered when you reopen the popup.", "success");
+    if (!quiet) setGlobalNotice(t("notice.selected"), "success");
     return true;
   } catch (_error) {
-    if (!quiet) setGlobalNotice("Refresh this LinkedIn feed tab so the extension scripts can load.", "error");
+    if (!quiet) setGlobalNotice(t("notice.refreshFeed"), "error");
     return false;
   }
 }
 
 async function clearTargetTab() {
   const oldWindowId = targetWindowId;
+  stateGeneration += 1;
+  detailGeneration += 1;
   targetTabId = null;
   targetWindowId = null;
   scrollStatus = null;
   hiringStatus = null;
   if (Number.isInteger(oldWindowId)) await writeTargetForWindow(oldWindowId, null).catch(() => {});
-  elements.stateLabel.textContent = "READY";
+  elements.stateLabel.textContent = t("scroll.ready");
   elements.stateDot.className = "state-dot";
-  elements.statusDetail.textContent = "Select a LinkedIn feed tab to begin.";
-  elements.monitorBtn.textContent = "Start hiring monitor";
+  elements.statusDetail.textContent = t("target.selectBegin");
+  elements.monitorBtn.textContent = t("monitor.start");
   elements.monitorBtn.classList.remove("is-running");
-  elements.monitorStatus.textContent = "Select a LinkedIn feed tab to monitor.";
+  elements.monitorStatus.textContent = t("target.monitorSelect");
   elements.monitorStatus.className = "monitor-status";
-  elements.domHealthStatus.textContent = "Feed DOM check runs when monitoring starts.";
+  elements.domHealthStatus.textContent = t("monitor.domStopped");
   elements.domHealthStatus.className = "dom-health";
   elements.openCount.textContent = "0";
   elements.recruiterCount.textContent = "0";
   elements.possibleCount.textContent = "0";
   elements.relatedCount.textContent = "0";
   elements.tabMatchCount.textContent = "0";
-  elements.processedDetail.textContent = "Select a feed tab to scan posts.";
+  elements.processedDetail.textContent = t("target.scanSelect");
   elements.matchList.replaceChildren();
+  elements.postDetail.hidden = true;
   setConnection(false, false);
   renderTargetState();
 }
@@ -435,13 +509,13 @@ async function initializeTarget() {
     const rememberedId = Number((stored.hiringTargetByWindow || {})[String(windowId)]);
     if (Number.isInteger(rememberedId)) {
       try {
-        const status = await chrome.tabs.sendMessage(rememberedId, { type: "GET_STATUS" });
-        if (status?.isFeed) {
-          targetTabId = rememberedId;
-          targetWindowId = windowId;
-        } else {
-          await writeTargetForWindow(windowId, null);
+        const rememberedTab = await chrome.tabs.get(rememberedId);
+        if (rememberedTab.windowId !== windowId || !isLinkedInFeedUrl(rememberedTab.url)) {
+          throw new Error("Remembered target moved or left the feed.");
         }
+        const status = await chrome.tabs.sendMessage(rememberedId, { type: "GET_STATUS" });
+        if (status?.isFeed) await setTargetTab(rememberedId, windowId, false);
+        else await writeTargetForWindow(windowId, null);
       } catch (_error) {
         await writeTargetForWindow(windowId, null);
       }
@@ -463,38 +537,42 @@ async function refreshActiveTabContext() {
   renderTargetState();
 }
 
-async function sendToTargetTab(message) {
+async function sendToTargetTab(message, options = {}) {
   if (!Number.isInteger(targetTabId)) {
     const selected = await chooseActiveFeedTab(null, true);
     if (!selected || !Number.isInteger(targetTabId)) {
       setConnection(false, false);
-      setGlobalNotice("Select an open LinkedIn feed tab to use the popup.");
+      setGlobalNotice(t("notice.selectFeed"));
       return null;
     }
   }
+  const requestTabId = targetTabId;
+  const generation = Number.isInteger(options.generation) ? options.generation : stateGeneration;
   try {
-    const response = await chrome.tabs.sendMessage(targetTabId, message);
+    const response = await chrome.tabs.sendMessage(requestTabId, message);
+    if (generation !== stateGeneration || requestTabId !== targetTabId) return null;
     setConnection(Boolean(response && response.supported !== false), Boolean(response && response.isFeed));
     if (response && response.isFeed === false) {
-      setGlobalNotice("The selected tab is no longer on the LinkedIn feed. Choose a feed tab to continue.");
+      setGlobalNotice(t("notice.leftFeed"));
     }
     return response;
   } catch (_error) {
+    if (generation !== stateGeneration || requestTabId !== targetTabId) return null;
     setConnection(false, false);
-    setGlobalNotice("The selected feed tab is unavailable. Return to it and refresh LinkedIn, or select another feed.", "error");
+    setGlobalNotice(t("notice.unavailable"), "error");
     return null;
   }
 }
 
 function renderButtons() {
   const state = scrollStatus?.state || "stopped";
-  elements.start.disabled = !available || !isFeed || state === "running";
-  elements.start.textContent = state === "paused" ? "Resume scrolling" : state === "running" ? "Scrolling…" : "Start scrolling";
+  elements.start.disabled = pendingScrollCommands.has("START") || pendingScrollCommands.has("RESUME") || !available || !isFeed || state === "running";
+  elements.start.textContent = state === "paused" ? t("scroll.resume") : state === "running" ? t("scroll.running") : t("scroll.start");
   elements.pause.disabled = !available || state !== "running";
   elements.stop.disabled = !available || state === "stopped";
-  elements.monitorBtn.disabled = !available || !isFeed;
+  elements.monitorBtn.disabled = pendingMonitorCommands.size > 0 || !available || !isFeed;
   elements.autoExpand.disabled = false;
-  elements.exportBtn.textContent = `Export ${elements.exportFormat.value === "csv" ? "CSV" : "JSON"}`;
+  elements.exportBtn.textContent = t(elements.exportFormat.value === "csv" ? "export.csv" : "export.json");
   const archiveCount = Number(hiringStatus?.archiveCount) || 0;
   elements.exportBtn.disabled = savedHistory.length === 0 && (!available || archiveCount === 0);
   elements.clearHistoryBtn.disabled = savedHistory.length === 0;
@@ -506,10 +584,10 @@ function renderScrollStatus(status) {
   setConnection(status.supported !== false, Boolean(status.isFeed));
 
   const state = status.state || "stopped";
-  const labels = { running: "SCROLLING", paused: "PAUSED", stopped: status.reason ? "STOPPED" : "READY" };
-  elements.stateLabel.textContent = labels[state] || "READY";
+  const labels = { running: t("scroll.running"), paused: t("scroll.paused"), stopped: status.reason ? t("scroll.stopped") : t("scroll.ready") };
+  elements.stateLabel.textContent = labels[state] || t("scroll.ready");
   elements.stateDot.className = `state-dot ${state}`;
-  elements.modeTag.textContent = MODE_NAMES[status.mode] || MODE_NAMES[elements.mode.value] || "Human-like";
+  elements.modeTag.textContent = t(MODE_NAMES[status.mode] || MODE_NAMES[elements.mode.value] || "mode.standard");
   const steps = Number(status.steps) || 0;
   const maxSteps = Number(status.maxSteps) || 0;
   const percent = maxSteps ? Math.min(100, (steps / maxSteps) * 100) : 0;
@@ -517,104 +595,48 @@ function renderScrollStatus(status) {
   elements.progressTrack.setAttribute("aria-valuenow", String(Math.round(percent)));
 
   if (state === "running" || state === "paused") {
-    elements.statusDetail.textContent = `${steps} / ${maxSteps} steps · ${formatDuration(status.elapsedMs)} active`;
+    elements.statusDetail.textContent = t("scroll.progressDetail", { steps, max: maxSteps, elapsed: formatDuration(status.elapsedMs) });
     const targetIsBackground = Number.isInteger(targetTabId) && Number.isInteger(activeTabId) && targetTabId !== activeTabId;
     setGlobalNotice(state === "running"
-      ? (targetIsBackground ? "Scrolling the selected feed in the background; Chrome may throttle it." : "Scrolling the selected LinkedIn feed tab.")
-      : status.reason || "Scroll paused.", state === "running" ? "success" : "");
+      ? t(targetIsBackground ? "scroll.background" : "scroll.active")
+      : status.reason || t("scroll.pausedNotice"), state === "running" ? "success" : "");
   } else {
-    elements.statusDetail.textContent = status.reason || (status.isFeed ? "Ready to scroll the LinkedIn feed." : "Open the feed to begin.");
-    setGlobalNotice(status.isFeed ? (status.reason ? "You can start another run when ready." : "Choose a pace, then start scrolling.") : "Open or select a LinkedIn feed tab to begin.");
+    elements.statusDetail.textContent = status.reason || t(status.isFeed ? "scroll.statusReady" : "notice.initial");
+    setGlobalNotice(t(status.isFeed ? (status.reason ? "scroll.restart" : "scroll.choosePace") : "notice.initial"));
   }
   renderButtons();
 }
 
-function filteredResults(status) {
-  const list = Array.isArray(status?.results) ? status.results : [];
-  const filter = elements.categoryFilter.value || "all";
-  return filter === "all" ? list : list.filter((item) => item.category === filter);
+async function updateReviewLabel(key, label) {
+  if (!key) return;
+  if (REVIEW_LABELS.has(label)) {
+    reviewLabels.set(key, { label, updatedAt: new Date().toISOString() });
+    if (reviewLabels.size > 1000) {
+      const oldest = Array.from(reviewLabels.entries()).sort((a, b) => Date.parse(a[1].updatedAt) - Date.parse(b[1].updatedAt))[0];
+      if (oldest) reviewLabels.delete(oldest[0]);
+    }
+  } else reviewLabels.delete(key);
+  try {
+    await persistReviewLabels();
+    setGlobalNotice(t("review.saved"), "success");
+  } catch (_error) {
+    setGlobalNotice(t("review.failed"), "error");
+  }
 }
 
-function categoryLabel(category) {
-  return CATEGORY_NAMES[category] || "Possible match";
-}
-
-function makeMatchItem(result) {
-  const item = document.createElement("article");
-  item.className = "match-item";
-
-  const top = document.createElement("div");
-  top.className = "match-topline";
-  const category = document.createElement("span");
-  category.className = `match-category ${result.category || "possible"}`;
-  category.textContent = categoryLabel(result.category);
-  const confidence = document.createElement("span");
-  confidence.className = `confidence-chip ${result.confidence || "low"}`;
-  confidence.textContent = result.partial ? "Partial" : result.confidence || "Review";
-  top.append(category, confidence);
-
-  const snippet = document.createElement("p");
-  snippet.className = "match-snippet";
-  snippet.textContent = result.snippet || "No preview text available.";
-
-  const evidence = document.createElement("p");
-  evidence.className = "match-evidence";
-  evidence.textContent = Array.isArray(result.evidence) && result.evidence.length
-    ? `Signals: ${result.evidence.join(" · ")}`
-    : "Review the full post; this is a low-confidence local match.";
-
-  item.append(top, snippet, evidence);
-  if (result.partial) {
-    const partial = document.createElement("span");
-    partial.className = "partial-note";
-    partial.textContent = "Text may still be truncated; monitor will retry after expansion.";
-    item.append(partial);
+async function showPostDetail(id) {
+  const request = ++detailGeneration;
+  const generation = stateGeneration;
+  elements.postDetail.hidden = false;
+  elements.postDetail.textContent = t("results.detailLoading");
+  const response = await sendToTargetTab({ type: "GET_HIRING_POST", id }, { generation });
+  if (request !== detailGeneration || generation !== stateGeneration) return;
+  if (!response?.post) {
+    elements.postDetail.hidden = true;
+    setGlobalNotice(t("detail.notFound"), "error");
+    return;
   }
-
-  const key = postKey(result);
-  const reviewRow = document.createElement("div");
-  reviewRow.className = "review-row";
-  const reviewCopy = document.createElement("span");
-  reviewCopy.className = "review-label";
-  reviewCopy.textContent = "Your local review";
-  const reviewSelect = document.createElement("select");
-  reviewSelect.className = "review-select";
-  reviewSelect.setAttribute("aria-label", "Local review label; does not affect detection");
-  const choices = [
-    ["", "No label"],
-    ["useful", "Useful"],
-    ["irrelevant", "Irrelevant"],
-    ["false_positive", "False positive"]
-  ];
-  for (const [value, label] of choices) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    reviewSelect.append(option);
-  }
-  reviewSelect.value = key ? (reviewLabels.get(key)?.label || "") : "";
-  reviewSelect.disabled = !key;
-  reviewSelect.addEventListener("change", async () => {
-    if (!key) return;
-    if (REVIEW_LABELS.has(reviewSelect.value)) {
-      reviewLabels.set(key, { label: reviewSelect.value, updatedAt: new Date().toISOString() });
-      if (reviewLabels.size > 1000) {
-        const oldest = Array.from(reviewLabels.entries()).sort((a, b) => Date.parse(a[1].updatedAt) - Date.parse(b[1].updatedAt))[0];
-        if (oldest) reviewLabels.delete(oldest[0]);
-      }
-    } else {
-      reviewLabels.delete(key);
-    }
-    try {
-      await persistReviewLabels();
-      setGlobalNotice("Review label saved on this device; detection signals were not changed.", "success");
-    } catch (_error) {
-      setGlobalNotice("Could not save the review label locally.", "error");
-    }
-  });
-  reviewRow.append(reviewCopy, reviewSelect);
-  item.append(reviewRow);
-  return item;
+  resultsRenderer.renderDetail(elements.postDetail, response.post);
 }
 
 function renderHiringStatus(status) {
@@ -625,22 +647,25 @@ function renderHiringStatus(status) {
   if (status.monitoring && typeof status.matchesOnly === "boolean") elements.matchesOnly.checked = status.matchesOnly;
 
   const monitoring = Boolean(status.monitoring);
-  elements.monitorBtn.textContent = monitoring ? "Stop hiring monitor" : "Start hiring monitor";
+  elements.monitorBtn.textContent = t(monitoring ? "monitor.stop" : "monitor.start");
   elements.monitorBtn.classList.toggle("is-running", monitoring);
-  if (monitoring && typeof status.keepHistory === "boolean") elements.keepHistory.checked = status.keepHistory;
+  if (monitoring && ["off", "session", "persistent"].includes(status.historyMode)) {
+    elements.historyMode.value = status.historyMode;
+    elements.keepHistory.checked = status.historyMode !== "off";
+  }
   if (monitoring && [7, 30, 90].includes(Number(status.historyRetentionDays))) elements.historyRetention.value = String(status.historyRetentionDays);
   const duplicates = Number(status.duplicateMergedCount) || 0;
+  const processedCount = Number(status.processedCount) || 0;
   elements.monitorStatus.textContent = monitoring
-    ? `Monitoring this feed · ${Number(status.processedCount) || 0} cards scanned${status.autoExpand ? " · auto-expansion on" : ""}${status.matchesOnly ? " · selected feed filter on" : ""}${duplicates ? ` · ${duplicates} duplicate card${duplicates === 1 ? "" : "s"} merged` : ""}.`
-    : Number(status.processedCount) > 0
-      ? `Monitor off · ${Number(status.processedCount)} cards scanned in the last run${duplicates ? ` · ${duplicates} duplicates merged` : ""}.`
-      : "Monitor is off.";
+    ? t("monitor.running", { count: processedCount })
+    : processedCount > 0 ? t("monitor.stopped", { count: processedCount }) : t("monitor.off");
+  if (duplicates) elements.monitorStatus.textContent += ` · ${t("monitor.duplicates", { count: duplicates })}`;
   elements.monitorStatus.className = `monitor-status${monitoring ? " running" : ""}`;
 
   const domHealth = status.domHealth || {};
   const healthLevel = ["ok", "partial", "warning"].includes(domHealth.level) ? domHealth.level : "";
-  const healthMessage = domHealth.message || (monitoring ? "Checking LinkedIn feed selectors…" : "Feed DOM check runs when monitoring starts.");
-  elements.domHealthStatus.textContent = `${healthMessage}${domHealth.background ? " Hidden tab: scrolling and gathering continue; Chrome may throttle them." : ""}`;
+  const healthMessage = domHealth.message || t(monitoring ? "monitor.domChecking" : "monitor.domStopped");
+  elements.domHealthStatus.textContent = `${healthMessage}${domHealth.background ? t("monitor.hidden") : ""}`;
   elements.domHealthStatus.className = `dom-health${healthLevel ? ` ${healthLevel === "ok" ? "good" : healthLevel}` : ""}`;
   renderHistoryStatus();
 
@@ -652,263 +677,314 @@ function renderHiringStatus(status) {
   const total = Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0);
   elements.tabMatchCount.textContent = total > 99 ? "99+" : String(total);
   elements.processedDetail.textContent = monitoring
-    ? `${Number(status.processedCount) || 0} cards checked · ${Number(status.archiveCount) || 0} unique detected posts · newest detections first`
-    : Number(status.processedCount) > 0
-      ? `${Number(status.processedCount)} cards checked · restart the monitor to scan again`
-      : "Start the monitor to scan posts as you browse.";
+    ? t("results.processedRunning", { checked: processedCount, archive: Number(status.archiveCount) || 0 })
+    : processedCount > 0
+      ? t("results.processedStopped", { count: processedCount })
+      : t("results.processedInitial");
   const archiveCount = Number(status.archiveCount) || 0;
-  elements.exportStatus.textContent = archiveCount || savedHistory.length
-    ? `${archiveCount} current-run posts${savedHistory.length ? ` · ${savedHistory.length} saved-history posts` : ""} available locally${status.archiveLimitReached ? " · current archive cap reached" : ""}. Choose format, fields, and category above.`
-    : monitoring
-      ? "Detected posts will be available for local download. Choose JSON or CSV and select fields above."
-      : "No detections or saved history to export yet. Review labels stay local and do not change detection.";
-
-  const items = filteredResults(status);
-  elements.matchList.replaceChildren();
-  if (!items.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    const icon = document.createElement("span");
-    icon.className = "empty-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = "⌕";
-    const title = document.createElement("strong");
-    title.textContent = monitoring ? "No matches in this view yet" : "No posts scanned yet";
-    const detail = document.createElement("span");
-    detail.textContent = monitoring
-      ? "Keep browsing. Possible or partial matches stay visible for review."
-      : "Start the monitor to detect likely hiring posts.";
-    empty.append(icon, title, detail);
-    elements.matchList.append(empty);
+  if (archiveCount || savedHistory.length) {
+    elements.exportStatus.textContent = t(savedHistory.length ? "export.availableWithHistory" : "export.availableStopped", {
+      count: archiveCount, history: savedHistory.length
+    });
+    if (status.archiveLimitReached) elements.exportStatus.textContent += ` ${t("export.capSuffix")}`;
   } else {
-    for (const result of items) elements.matchList.append(makeMatchItem(result));
+    elements.exportStatus.textContent = t(monitoring ? "export.availableRunning" : "export.noneYet");
   }
+
+  if (lastArchiveCount === null) lastArchiveCount = archiveCount;
+  else if (lastArchiveCount !== archiveCount) {
+    lastArchiveCount = archiveCount;
+    archiveExported = false;
+    archiveAcknowledged = false;
+  }
+  resultsRenderer.renderResults(elements.matchList, status.results, {
+    reviewLabels,
+    monitoring,
+    onReview: (id, label) => void updateReviewLabel(id, label),
+    onDetail: (id) => void showPostDetail(id)
+  });
+  const page = Math.max(1, Number(status.page) || 1);
+  resultQuery.page = page;
+  const totalResults = Math.max(0, Number(status.total) || 0);
+  const pageSize = Math.max(1, Number(status.pageSize) || resultQuery.pageSize);
+  const rangeStart = totalResults ? (page - 1) * pageSize + 1 : 0;
+  const rangeEnd = totalResults ? Math.min(totalResults, page * pageSize) : 0;
+  elements.pageStatus.textContent = t("results.range", { page, start: rangeStart, end: rangeEnd, count: totalResults });
+  elements.previousPage.disabled = page <= 1;
+  elements.nextPage.disabled = !status.hasMore;
   renderButtons();
 }
 
-async function refreshScrollStatus() {
-  const status = await sendToTargetTab({ type: "GET_STATUS" });
-  if (status) renderScrollStatus(status);
-}
-
-async function refreshHiringStatus() {
-  const status = await sendToTargetTab({ type: "GET_HIRING_STATUS" });
-  if (status) renderHiringStatus(status);
-}
-
-async function refreshAll() {
-  await refreshActiveTabContext();
-  if (!Number.isInteger(targetTabId)) {
-    renderButtons();
-    return;
+async function refreshScrollStatus(generation = stateGeneration, commandGeneration = null) {
+  const status = await sendToTargetTab({ type: "GET_STATUS" }, { generation });
+  if (status && generation === stateGeneration && (commandGeneration === null || commandGeneration === scrollGeneration)) {
+    renderScrollStatus(status);
   }
-  await Promise.all([refreshScrollStatus(), refreshHiringStatus()]);
+}
+
+async function refreshSavedHistory(generation = stateGeneration) {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "HISTORY_GET" });
+    if (generation !== stateGeneration) return;
+    if (response?.error) {
+      savedHistoryStats = { ...savedHistoryStats, error: response.error };
+      renderHistoryStatus();
+      return;
+    }
+    savedHistory = sanitizeHistory(response?.records || []);
+    savedHistoryStats = {
+      bytes: Number(response?.bytes) || 0,
+      stores: response?.stores || {},
+      lastSuccessfulSaveAt: response?.lastSuccessfulSaveAt || null,
+      limitReached: response?.limitReached === true,
+      error: null
+    };
+    renderHistoryStatus();
+    if (hiringStatus && generation === stateGeneration) renderHiringStatus(hiringStatus);
+  } catch (_error) {
+    if (generation !== stateGeneration) return;
+    savedHistoryStats = { ...savedHistoryStats, error: "storage_unavailable" };
+    renderHistoryStatus();
+  }
+}
+
+async function refreshHiringStatus(generation = stateGeneration) {
+  const query = { ...resultQuery };
+  const [status] = await Promise.all([
+    sendToTargetTab({ type: "GET_HIRING_STATUS", query }, { generation }),
+    refreshSavedHistory(generation)
+  ]);
+  if (status && generation === stateGeneration) renderHiringStatus(status);
+}
+
+function refreshAll() {
+  if (refreshPromise) {
+    if (activeRefreshGeneration !== stateGeneration) refreshQueued = true;
+    return refreshPromise;
+  }
+  const generation = stateGeneration;
+  activeRefreshGeneration = generation;
+  const operation = (async () => {
+    await refreshActiveTabContext();
+    if (generation !== stateGeneration) return;
+    if (!Number.isInteger(targetTabId)) {
+      renderButtons();
+      return;
+    }
+    await Promise.all([refreshScrollStatus(generation), refreshHiringStatus(generation)]);
+  })();
+  refreshPromise = operation.catch(() => {
+    if (generation === stateGeneration) setGlobalNotice(t("notice.unavailable"), "error");
+  }).finally(() => {
+    refreshPromise = null;
+    activeRefreshGeneration = null;
+    if (refreshQueued) {
+      refreshQueued = false;
+      void refreshAll();
+    }
+  });
+  return refreshPromise;
+}
+
+function updateResultQuery(changes) {
+  Object.assign(resultQuery, changes);
+  stateGeneration += 1;
+  return refreshAll();
 }
 
 async function runScrollCommand(type) {
-  if (type === "START") {
-    await saveSettings();
-    setGlobalNotice("Starting the feed scroller…");
+  if (pendingScrollCommands.has(type)) return;
+  pendingScrollCommands.add(type);
+  renderButtons();
+  const generation = stateGeneration;
+  let commandGeneration = null;
+  try {
+    commandGeneration = ++scrollGeneration;
+    if (type === "START") {
+      await saveSettings();
+      if (commandGeneration !== scrollGeneration || generation !== stateGeneration) return;
+      setGlobalNotice(t("scroll.starting"));
+    }
+    const message = type === "START" ? { type, settings: readSettings() } : { type };
+    const response = await sendToTargetTab(message, { generation });
+    if (!response || commandGeneration !== scrollGeneration || generation !== stateGeneration) return;
+    if (response.error) {
+      setGlobalNotice(response.error, "error");
+      return;
+    }
+    if (response.status) renderScrollStatus(response.status);
+    await refreshScrollStatus(generation, commandGeneration);
+  } catch (_error) {
+    if (generation === stateGeneration) setGlobalNotice(t("settings.saveFailed"), "error");
+  } finally {
+    pendingScrollCommands.delete(type);
+    renderButtons();
   }
-  const message = type === "START" ? { type, settings: readSettings() } : { type };
-  const response = await sendToTargetTab(message);
-  if (!response) return;
-  if (response.error) {
-    setGlobalNotice(response.error, "error");
-    return;
-  }
-  if (response.status) renderScrollStatus(response.status);
-  await refreshScrollStatus();
 }
 
 async function runMonitorCommand() {
   const isRunning = Boolean(hiringStatus?.monitoring);
-  if (!isRunning) await saveHiringPrefs();
-  const response = await sendToTargetTab(isRunning
-    ? { type: "STOP_HIRING_MONITOR" }
-    : { type: "START_HIRING_MONITOR", options: monitorOptions() });
-  if (!response) return;
-  if (response.error) {
-    setGlobalNotice(response.error, "error");
-    return;
+  const action = isRunning ? "stop" : "start";
+  if (pendingMonitorCommands.has(action)) return;
+  pendingMonitorCommands.add(action);
+  renderButtons();
+  let generation = stateGeneration;
+  try {
+    const archiveCount = Number(hiringStatus?.archiveCount) || 0;
+    if (!isRunning && archiveCount > 0 && !archiveExported && !archiveAcknowledged) {
+      const confirmed = window.confirm(t("monitor.restartConfirm", { count: archiveCount }));
+      if (!confirmed) return;
+      archiveAcknowledged = true;
+    }
+    generation = ++stateGeneration;
+    if (!isRunning) await saveHiringPrefs();
+    if (generation !== stateGeneration) return;
+    const response = await sendToTargetTab(isRunning
+      ? { type: "STOP_HIRING_MONITOR" }
+      : { type: "START_HIRING_MONITOR", options: monitorOptions() }, { generation });
+    if (!response || generation !== stateGeneration) return;
+    if (response.error) {
+      setGlobalNotice(response.error, "error");
+      return;
+    }
+    if (response.status) renderHiringStatus(response.status);
+  } catch (_error) {
+    if (generation === stateGeneration) setGlobalNotice(t("settings.saveFailed"), "error");
+  } finally {
+    pendingMonitorCommands.delete(action);
+    renderButtons();
   }
-  if (response.status) renderHiringStatus(response.status);
 }
 
 async function updateMonitorPreferences() {
-  await saveHiringPrefs();
-  renderHistoryStatus();
-  if (hiringStatus?.monitoring && available && isFeed) {
-    const response = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
-    if (response?.status) renderHiringStatus(response.status);
+  const generation = ++stateGeneration;
+  try {
+    await saveHiringPrefs();
+    if (generation !== stateGeneration) return;
+    renderHistoryStatus();
+    if (hiringStatus?.monitoring && available && isFeed) {
+      await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() }, { generation });
+    }
+    await refreshAll();
+  } catch (_error) {
+    if (generation === stateGeneration) setGlobalNotice(t("settings.saveFailed"), "error");
   }
 }
 
 async function clearLocalHistory() {
+  if (!window.confirm(t("clear.historyConfirm"))) return;
   elements.clearHistoryBtn.disabled = true;
   try {
+    const response = await chrome.runtime.sendMessage({ type: "LOCAL_DATA_CLEAR", scopes: ["history"] });
+    if (response?.error) throw new Error(response.error);
+    elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
+    hiringPrefs = { ...hiringPrefs, historyMode: "off" };
     await saveHiringPrefs();
     if (hiringStatus?.monitoring && available && isFeed) {
-      const response = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
-      if (response?.status) renderHiringStatus(response.status);
+      const statusResponse = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
+      if (statusResponse?.status) renderHiringStatus(statusResponse.status);
     }
-    await chrome.storage.local.remove("hiringPostHistory");
     savedHistory = [];
+    savedHistoryStats = { bytes: 0, stores: {}, lastSuccessfulSaveAt: null, limitReached: false, error: null };
     renderHistoryStatus();
-    elements.exportStatus.textContent = "Saved post history cleared from this device. Review labels were kept.";
-    setGlobalNotice("Local post history cleared; no post data was uploaded.", "success");
+    elements.exportStatus.textContent = t("clear.historyDetail");
+    setGlobalNotice(t("clear.historyDone"), "success");
   } catch (_error) {
-    setGlobalNotice("Could not clear saved history from local storage.", "error");
+    setGlobalNotice(t("clear.failed"), "error");
     renderHistoryStatus();
+  }
+}
+
+async function clearAllStoredData() {
+  if (!window.confirm(t("clear.allConfirm"))) return;
+  elements.clearAllDataBtn.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "LOCAL_DATA_CLEAR", scopes: ["all"] });
+    if (response?.error) throw new Error(response.error);
+    stateGeneration += 1;
+    detailGeneration += 1;
+    savedHistory = [];
+    savedHistoryStats = { bytes: 0, stores: {}, lastSuccessfulSaveAt: null, limitReached: false, error: null };
+    reviewLabels = new Map();
+    targetTabId = null;
+    targetWindowId = null;
+    scrollStatus = null;
+    hiringStatus = null;
+    hiringPrefs = { ...DEFAULT_HIRING_PREFS, historyMode: "off" };
+    applySettings(DEFAULT_SETTINGS);
+    elements.autoExpand.checked = true;
+    elements.categoryFilter.value = "all";
+    elements.matchesOnly.checked = false;
+    elements.exportFormat.value = "json";
+    elements.exportFilteredOnly.checked = false;
+    elements.includeFullText.checked = false;
+    elements.includeEmails.checked = false;
+    elements.includeJobTitles.checked = true;
+    elements.includeMetrics.checked = true;
+    elements.includePostMetadata.checked = true;
+    elements.historyMode.value = "off";
+    elements.keepHistory.checked = false;
+    elements.historyRetention.value = "30";
+    Object.assign(resultQuery, { filter: "all", search: "", sort: "newest", page: 1, pageSize: 25 });
+    elements.resultSearch.value = "";
+    elements.resultSort.value = "newest";
+    renderTargetState();
+    renderHiringStatus({ supported: false, isFeed: false, monitoring: false, counts: {}, processedCount: 0, archiveCount: 0 });
+    applyPopupLocale();
+    elements.exportStatus.textContent = t("clear.allDone");
+    setGlobalNotice(t("clear.allDone"), "success");
+  } catch (_error) {
+    setGlobalNotice(t("clear.failed"), "error");
+  } finally {
+    renderButtons();
   }
 }
 
 async function exportHiringPosts() {
   elements.exportBtn.disabled = true;
   const format = elements.exportFormat.value === "csv" ? "csv" : "json";
-  elements.exportStatus.textContent = `Preparing the local ${format.toUpperCase()} export…`;
+  const generation = stateGeneration;
+  elements.exportStatus.textContent = t("export.preparing", { format: format.toUpperCase() });
   try {
     await saveHiringPrefs();
-    let response = null;
-    if (available && isFeed) response = await sendToTargetTab({ type: "EXPORT_HIRING_POSTS" });
-    const stored = await chrome.storage.local.get({ hiringPostHistory: savedHistory });
-    savedHistory = sanitizeHistory(stored.hiringPostHistory);
+    if (generation !== stateGeneration) return;
+    let currentRun = null;
+    if (available && isFeed) currentRun = await sendToTargetTab({ type: "EXPORT_HIRING_POSTS" }, { generation });
+    if (generation !== stateGeneration) return;
+    const historyResponse = await chrome.runtime.sendMessage({ type: "HISTORY_GET" });
+    if (generation !== stateGeneration) return;
+    if (historyResponse?.error) throw new Error(historyResponse.error);
+    savedHistory = sanitizeHistory(historyResponse?.records || []);
     renderHistoryStatus();
 
-    const combined = new Map();
-    for (const post of savedHistory) {
-      const key = postKey(post);
-      if (key) combined.set(key, post);
-    }
-    for (const post of Array.isArray(response?.posts) ? response.posts : []) {
-      const key = postKey(post);
-      if (key) combined.set(key, post);
-    }
-    let posts = Array.from(combined.values())
-      .sort((a, b) => Date.parse(a.firstSeenAt || "") - Date.parse(b.firstSeenAt || ""));
+    const preferences = readHiringPrefs();
+    const selectedCategory = preferences.exportFilteredOnly ? preferences.filter : "all";
+    const posts = exporter.mergeExportSources(
+      { posts: currentRun?.posts || [] },
+      { records: savedHistory },
+      { reviewLabels: Object.fromEntries(reviewLabels.entries()) }
+    );
     const totalAvailable = posts.length;
-    if (elements.exportFilteredOnly.checked && elements.categoryFilter.value !== "all") {
-      posts = posts.filter((post) => post.category === elements.categoryFilter.value);
-    }
-    if (!posts.length) {
-      elements.exportStatus.textContent = totalAvailable
-        ? "No posts match the current export category. Change the category or disable “selected category only”."
-        : "No detections or saved history are available to export.";
+    const exportOptions = {
+      preferences,
+      scope: selectedCategory !== "all"
+        ? `Posts from the selected category: ${selectedCategory}.`
+        : "All detected posts available from the current run and local history.",
+      monitorRun: currentRun?.monitorRun || null,
+      extractionNotes: currentRun?.extractionNotes || null
+    };
+    const payload = exporter.buildJsonPayload(posts, exportOptions);
+    if (!payload.posts.length) {
+      elements.exportStatus.textContent = t(totalAvailable ? "export.emptyCategory" : "export.empty");
       return;
     }
 
-    const options = {
-      fullText: elements.includeFullText.checked,
-      emails: elements.includeEmails.checked,
-      jobTitles: elements.includeJobTitles.checked,
-      metrics: elements.includeMetrics.checked,
-      postMetadata: elements.includePostMetadata.checked
-    };
-    const projectedPosts = posts.map((post) => {
-      const key = postKey(post);
-      const review = key ? reviewLabels.get(key)?.label : null;
-      const output = {
-        id: post.id || null,
-        sourcePostId: post.sourcePostId || null,
-        category: post.category || "unknown",
-        confidence: post.confidence || null,
-        score: Number.isFinite(post.score) ? post.score : null,
-        evidence: Array.isArray(post.evidence) ? post.evidence : [],
-        signals: post.signals || null,
-        firstSeenAt: post.firstSeenAt || null,
-        lastSeenAt: post.lastSeenAt || null,
-        reviewLabel: review || null
-      };
-      if (options.fullText) {
-        output.fullText = post.fullText || "";
-        output.contentComplete = post.contentComplete !== false;
-      }
-      const extracted = {};
-      if (options.emails) extracted.emails = post.extracted?.emails || [];
-      if (options.jobTitles) extracted.jobTitles = post.extracted?.jobTitles || [];
-      if (options.postMetadata) {
-        output.permalink = post.permalink || null;
-        output.author = post.author || { name: null, profileUrl: null };
-        extracted.hashtags = post.extracted?.hashtags || [];
-        extracted.links = post.extracted?.links || [];
-      }
-      if (Object.keys(extracted).length) output.extracted = extracted;
-      if (options.metrics) {
-        output.postAge = post.postAge || { label: null, publishedAt: null, ageSecondsApprox: null, ageDaysApprox: null };
-        output.metrics = post.metrics || { reactions: null, comments: null, reposts: null, views: null };
-        output.metricsCapturedAt = post.metricsCapturedAt || null;
-      }
-      return output;
-    });
-
+    const blob = format === "csv"
+      ? new Blob([exporter.buildCsv(posts, exportOptions)], { type: "text/csv;charset=utf-8" })
+      : new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const extension = format === "csv" ? "csv" : "json";
     const timestamp = new Date().toISOString().replace(/:/g, "-").replace(/\.\d{3}Z$/u, "Z");
-    let blob;
-    let extension;
-    if (format === "csv") {
-      const fields = [
-        ["id", (post) => post.id],
-        ["sourcePostId", (post) => post.sourcePostId],
-        ["category", (post) => post.category],
-        ["confidence", (post) => post.confidence],
-        ["score", (post) => post.score],
-        ["evidence", (post) => post.evidence],
-        ["signals", (post) => post.signals],
-        ["reviewLabel", (post) => post.reviewLabel],
-        ["firstSeenAt", (post) => post.firstSeenAt],
-        ["lastSeenAt", (post) => post.lastSeenAt]
-      ];
-      if (options.fullText) fields.push(["fullText", (post) => post.fullText], ["contentComplete", (post) => post.contentComplete]);
-      if (options.emails) fields.push(["emails", (post) => post.extracted?.emails]);
-      if (options.jobTitles) fields.push(["jobTitleCandidates", (post) => post.extracted?.jobTitles]);
-      if (options.metrics) fields.push(
-        ["ageLabel", (post) => post.postAge?.label],
-        ["publishedAt", (post) => post.postAge?.publishedAt],
-        ["ageSecondsApprox", (post) => post.postAge?.ageSecondsApprox],
-        ["ageDaysApprox", (post) => post.postAge?.ageDaysApprox],
-        ["reactions", (post) => post.metrics?.reactions],
-        ["comments", (post) => post.metrics?.comments],
-        ["reposts", (post) => post.metrics?.reposts],
-        ["views", (post) => post.metrics?.views],
-        ["metricsCapturedAt", (post) => post.metricsCapturedAt]
-      );
-      if (options.postMetadata) fields.push(
-        ["permalink", (post) => post.permalink],
-        ["authorName", (post) => post.author?.name],
-        ["authorProfileUrl", (post) => post.author?.profileUrl],
-        ["hashtags", (post) => post.extracted?.hashtags],
-        ["links", (post) => post.extracted?.links]
-      );
-      const csvValue = (value) => {
-        const raw = value === null || value === undefined
-          ? ""
-          : Array.isArray(value) || (typeof value === "object") ? JSON.stringify(value) : String(value);
-        return `"${raw.replace(/"/g, '""')}"`;
-      };
-      const rows = [fields.map(([name]) => csvValue(name)).join(",")];
-      for (const post of projectedPosts) rows.push(fields.map(([, getValue]) => csvValue(getValue(post))).join(","));
-      blob = new Blob(["\uFEFF", rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
-      extension = "csv";
-    } else {
-      const payload = {
-        schemaVersion: response?.schemaVersion || "1.0",
-        exportedAt: new Date().toISOString(),
-        scope: elements.exportFilteredOnly.checked
-          ? `Posts from the selected category: ${elements.categoryFilter.value}.`
-          : "All detected posts available from the current run and local history.",
-        selectedCategory: elements.exportFilteredOnly.checked ? elements.categoryFilter.value : "all",
-        fieldsIncluded: options,
-        monitorRun: response?.monitorRun || null,
-        extractionNotes: response?.extractionNotes || {
-          content: "Full post text is included only if selected and available in the local archive.",
-          reviewLabels: "Review labels are user-provided local notes and do not affect classifier signals."
-        },
-        posts: projectedPosts
-      };
-      blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
-      extension = "json";
-    }
-
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = objectUrl;
@@ -918,27 +994,76 @@ async function exportHiringPosts() {
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+    archiveExported = true;
 
-    elements.exportStatus.textContent = `${projectedPosts.length} posts exported to a local ${format.toUpperCase()} file${savedHistory.length ? `, including local history` : ""}. Selected fields and category were applied.`;
-    setGlobalNotice(`${format.toUpperCase()} export created locally; no post data was uploaded.`, "success");
+    elements.exportStatus.textContent = t("export.success", { count: payload.posts.length, format: format.toUpperCase() });
+    setGlobalNotice(t("export.success", { count: payload.posts.length, format: format.toUpperCase() }), "success");
   } catch (_error) {
-    elements.exportStatus.textContent = `The ${format.toUpperCase()} download failed. Try again from the LinkedIn feed tab.`;
+    elements.exportStatus.textContent = t("export.failed", { format: format.toUpperCase() });
   } finally {
     renderButtons();
   }
 }
 
-function switchView(name) {
+async function downloadLocalDiagnostic() {
+  elements.diagnosticBtn.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "GET_DIAGNOSTICS" });
+    if (response?.error) throw new Error(response.error);
+    const status = hiringStatus || {};
+    const browserVersion = String(globalThis.navigator?.userAgent || "").match(/Chrome\/([0-9.]+)/)?.[1] || "unknown";
+    exporter.downloadDiagnostic({
+      ...(response.diagnostic || {}),
+      extensionVersion: chrome.runtime.getManifest().version,
+      browserVersion,
+      messageSchemaVersion: shared.MESSAGE_SCHEMA_VERSION,
+      selectorHealth: status.domHealth || {},
+      timings: Object.fromEntries(Object.entries(status.scan || {}).filter(([key]) => key.endsWith("Ms"))),
+      counts: {
+        ...(status.scan || {}),
+        processedCount: Number(status.processedCount) || 0,
+        archiveCount: Number(status.archiveCount) || 0,
+        duplicateMergedCount: Number(status.duplicateMergedCount) || 0,
+        savedHistoryCount: savedHistory.length
+      }
+    });
+    elements.exportStatus.textContent = t("diagnostic.success");
+    setGlobalNotice(t("diagnostic.success"), "success");
+  } catch (_error) {
+    setGlobalNotice(t("diagnostic.failed"), "error");
+  } finally {
+    elements.diagnosticBtn.disabled = false;
+    renderButtons();
+  }
+}
+
+function switchView(name, focus = false) {
   const hiring = name === "hiring";
   elements.scrollTab.classList.toggle("active", !hiring);
   elements.hiringTab.classList.toggle("active", hiring);
   elements.scrollTab.setAttribute("aria-selected", String(!hiring));
   elements.hiringTab.setAttribute("aria-selected", String(hiring));
+  elements.scrollTab.tabIndex = hiring ? -1 : 0;
+  elements.hiringTab.tabIndex = hiring ? 0 : -1;
   elements.scrollView.classList.toggle("active", !hiring);
   elements.hiringView.classList.toggle("active", hiring);
   elements.scrollView.hidden = hiring;
   elements.hiringView.hidden = !hiring;
-  if (hiring) void refreshHiringStatus();
+  if (focus) (hiring ? elements.hiringTab : elements.scrollTab).focus();
+  if (hiring) void refreshAll();
+}
+
+function handleTabKeydown(event) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const tabs = [elements.scrollTab, elements.hiringTab];
+  const current = tabs.indexOf(document.activeElement);
+  let index = current < 0 ? 0 : current;
+  if (event.key === "Home") index = 0;
+  else if (event.key === "End") index = tabs.length - 1;
+  else if (event.key === "ArrowRight") index = (index + 1) % tabs.length;
+  else index = (index - 1 + tabs.length) % tabs.length;
+  switchView(index === 1 ? "hiring" : "scroll", true);
 }
 
 async function initialize() {
@@ -958,12 +1083,21 @@ async function initialize() {
     hiringPrefs = { ...DEFAULT_HIRING_PREFS, ...(stored.hiringPreferences || {}) };
     if (!FILTERS.includes(hiringPrefs.filter)) hiringPrefs.filter = "all";
     if (!["json", "csv"].includes(hiringPrefs.exportFormat)) hiringPrefs.exportFormat = "json";
+    if (!["auto", "en", "fr", "ar"].includes(hiringPrefs.locale)) hiringPrefs.locale = "auto";
+    hiringPrefs.onboardingSeen = hiringPrefs.onboardingSeen === true;
     if (![7, 30, 90].includes(Number(hiringPrefs.historyRetentionDays))) hiringPrefs.historyRetentionDays = 30;
+    if (!["off", "session", "persistent"].includes(hiringPrefs.historyMode)) {
+      hiringPrefs.historyMode = hiringPrefs.keepHistory ? "persistent" : "off";
+    }
+    hiringPrefs.keepHistory = hiringPrefs.historyMode !== "off";
     for (const key of ["includeFullText", "includeEmails", "includeJobTitles", "includeMetrics", "includePostMetadata"]) {
       hiringPrefs[key] = hiringPrefs[key] !== false;
     }
     elements.autoExpand.checked = hiringPrefs.autoExpand !== false;
     elements.categoryFilter.value = hiringPrefs.filter;
+    resultQuery.filter = hiringPrefs.filter;
+    elements.resultSearch.value = resultQuery.search;
+    elements.resultSort.value = resultQuery.sort;
     elements.matchesOnly.checked = Boolean(hiringPrefs.matchesOnly);
     elements.exportFormat.value = hiringPrefs.exportFormat;
     elements.exportFilteredOnly.checked = Boolean(hiringPrefs.exportFilteredOnly);
@@ -972,7 +1106,8 @@ async function initialize() {
     elements.includeJobTitles.checked = hiringPrefs.includeJobTitles;
     elements.includeMetrics.checked = hiringPrefs.includeMetrics;
     elements.includePostMetadata.checked = hiringPrefs.includePostMetadata;
-    elements.keepHistory.checked = Boolean(hiringPrefs.keepHistory);
+    elements.historyMode.value = hiringPrefs.historyMode;
+    elements.keepHistory.checked = hiringPrefs.historyMode !== "off";
     elements.historyRetention.value = String(hiringPrefs.historyRetentionDays);
     savedHistory = sanitizeHistory(stored.hiringPostHistory);
     reviewLabels = sanitizeReviewLabels(stored.hiringReviewLabels);
@@ -980,20 +1115,27 @@ async function initialize() {
     applySettings(DEFAULT_SETTINGS);
     hiringPrefs = { ...DEFAULT_HIRING_PREFS };
     savedHistory = [];
+    savedHistoryStats = { bytes: 0, stores: {}, lastSuccessfulSaveAt: null, limitReached: false, error: null };
     reviewLabels = new Map();
     elements.autoExpand.checked = true;
+    elements.categoryFilter.value = "all";
+    Object.assign(resultQuery, { filter: "all", search: "", sort: "newest", page: 1, pageSize: 25 });
+    elements.resultSearch.value = "";
+    elements.resultSort.value = "newest";
     elements.matchesOnly.checked = false;
     elements.exportFormat.value = "json";
     elements.exportFilteredOnly.checked = false;
-    elements.includeFullText.checked = true;
-    elements.includeEmails.checked = true;
+    elements.includeFullText.checked = false;
+    elements.includeEmails.checked = false;
     elements.includeJobTitles.checked = true;
     elements.includeMetrics.checked = true;
     elements.includePostMetadata.checked = true;
+    elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
     elements.historyRetention.value = "30";
   }
-  renderHistoryStatus();
+  applyPopupLocale();
+  await refreshSavedHistory();
 
   elements.mode.addEventListener("change", () => { applySafetyModeConstraints(); queueSaveSettings(); });
   [elements.maxMinutes, elements.maxSteps, elements.pauseOnInput]
@@ -1004,77 +1146,117 @@ async function initialize() {
   elements.stop.addEventListener("click", () => void runScrollCommand("STOP"));
   elements.monitorBtn.addEventListener("click", () => void runMonitorCommand());
   elements.exportBtn.addEventListener("click", () => void exportHiringPosts());
+  elements.localeSelect.addEventListener("change", () => {
+    hiringPrefs.locale = elements.localeSelect.value;
+    applyPopupLocale();
+    void saveHiringPrefs().catch(() => setGlobalNotice(t("settings.saveFailed"), "error"));
+  });
+  elements.onboardingDismiss.addEventListener("click", () => {
+    hiringPrefs.onboardingSeen = true;
+    elements.onboarding.hidden = true;
+    void saveHiringPrefs().catch(() => setGlobalNotice(t("settings.saveFailed"), "error"));
+  });
   elements.scrollTab.addEventListener("click", () => switchView("scroll"));
   elements.hiringTab.addEventListener("click", () => switchView("hiring"));
-  elements.useActiveFeedBtn.addEventListener("click", async () => {
-    if (await chooseActiveFeedTab()) await refreshAll();
+  elements.scrollTab.addEventListener("keydown", handleTabKeydown);
+  elements.hiringTab.addEventListener("keydown", handleTabKeydown);
+  elements.useActiveFeedBtn.addEventListener("click", () => {
+    void (async () => {
+      if (await chooseActiveFeedTab()) await refreshAll();
+    })().catch(() => setGlobalNotice(t("notice.unavailable"), "error"));
   });
   elements.returnToFeedBtn.addEventListener("click", async () => {
     if (!Number.isInteger(targetTabId)) return;
+    const requestedTabId = targetTabId;
     try {
-      await chrome.tabs.update(targetTabId, { active: true });
-      setGlobalNotice("Returned to the selected LinkedIn feed tab.", "success");
+      const tab = await chrome.tabs.get(requestedTabId);
+      if (targetTabId !== requestedTabId) return;
+      if (!isLinkedInFeedUrl(tab.url)) throw new Error("Target left the feed");
+      const previousWindowId = targetWindowId;
+      targetWindowId = tab.windowId;
+      if (previousWindowId !== tab.windowId) {
+        await writeTargetForWindow(previousWindowId, null);
+        if (targetTabId !== requestedTabId) return;
+        await writeTargetForWindow(tab.windowId, requestedTabId);
+      }
+      if (targetTabId !== requestedTabId) return;
+      await chrome.windows.update(tab.windowId, { focused: true });
+      await chrome.tabs.update(requestedTabId, { active: true });
+      setGlobalNotice(t("notice.returned"), "success");
     } catch (_error) {
       await clearTargetTab();
-      setGlobalNotice("The selected feed tab was closed. Choose another LinkedIn feed.", "error");
+      setGlobalNotice(t("notice.closedChoose"), "error");
     }
   });
-  chrome.tabs.onActivated?.addListener(() => { void refreshActiveTabContext(); });
+  chrome.tabs.onActivated?.addListener(() => { void refreshAll(); });
   chrome.tabs.onRemoved?.addListener((tabId) => {
     if (tabId === targetTabId) {
       void clearTargetTab();
-      setGlobalNotice("The selected LinkedIn tab closed; live monitoring has ended.");
+      setGlobalNotice(t("notice.closed"));
     }
   });
   chrome.tabs.onUpdated?.addListener((tabId, changeInfo) => {
     if (tabId === targetTabId && changeInfo?.url && !isLinkedInFeedUrl(changeInfo.url)) {
       void clearTargetTab();
-      setGlobalNotice("The selected tab left the LinkedIn feed; monitoring has ended.");
+      setGlobalNotice(t("notice.leftFeed"));
     }
   });
 
-  elements.autoExpand.addEventListener("change", async () => {
-    await saveHiringPrefs();
-    if (hiringStatus?.monitoring && available && isFeed) {
-      const response = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
-      if (response?.status) renderHiringStatus(response.status);
-    }
-  });
+  elements.autoExpand.addEventListener("change", () => void updateMonitorPreferences());
   elements.categoryFilter.addEventListener("change", async () => {
-    await saveHiringPrefs();
-    if (hiringStatus?.monitoring && available && isFeed) {
-      const response = await sendToTargetTab({ type: "SET_HIRING_FILTER", filter: elements.categoryFilter.value, matchesOnly: elements.matchesOnly.checked });
-      if (response?.status) renderHiringStatus(response.status);
-    } else if (hiringStatus) {
-      renderHiringStatus(hiringStatus);
+    resultQuery.filter = FILTERS.includes(elements.categoryFilter.value) ? elements.categoryFilter.value : "all";
+    resultQuery.page = 1;
+    const generation = ++stateGeneration;
+    try {
+      await saveHiringPrefs();
+      if (generation !== stateGeneration) return;
+      if (hiringStatus?.monitoring && available && isFeed) {
+        await sendToTargetTab({ type: "SET_HIRING_FILTER", filter: resultQuery.filter, matchesOnly: elements.matchesOnly.checked }, { generation });
+      }
+      await refreshAll();
+    } catch (_error) {
+      if (generation === stateGeneration) setGlobalNotice(t("settings.saveFailed"), "error");
     }
   });
-  elements.matchesOnly.addEventListener("change", async () => {
-    await saveHiringPrefs();
-    if (hiringStatus?.monitoring && available && isFeed) {
-      const response = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
-      if (response?.status) renderHiringStatus(response.status);
-    }
+  elements.resultSearch.addEventListener("input", () => {
+    void updateResultQuery({ search: elements.resultSearch.value, page: 1 });
   });
+  elements.resultSort.addEventListener("change", () => {
+    void updateResultQuery({ sort: elements.resultSort.value === "oldest" ? "oldest" : "newest", page: 1 });
+  });
+  elements.previousPage.addEventListener("click", () => {
+    void updateResultQuery({ page: Math.max(1, resultQuery.page - 1) });
+  });
+  elements.nextPage.addEventListener("click", () => {
+    void updateResultQuery({ page: resultQuery.page + 1 });
+  });
+  elements.matchesOnly.addEventListener("change", () => void updateMonitorPreferences());
 
   [elements.exportFormat, elements.exportFilteredOnly, elements.includeFullText, elements.includeEmails,
     elements.includeJobTitles, elements.includeMetrics, elements.includePostMetadata]
     .forEach((element) => element.addEventListener("change", async () => {
-      await saveHiringPrefs();
-      renderButtons();
+      try {
+        await saveHiringPrefs();
+        renderButtons();
+      } catch (_error) {
+        setGlobalNotice(t("settings.saveFailed"), "error");
+      }
     }));
-  elements.keepHistory.addEventListener("change", () => void updateMonitorPreferences());
+  elements.historyMode.addEventListener("change", () => {
+    elements.keepHistory.checked = elements.historyMode.value !== "off";
+    void updateMonitorPreferences();
+  });
   elements.historyRetention.addEventListener("change", () => void updateMonitorPreferences());
   elements.clearHistoryBtn.addEventListener("click", () => void clearLocalHistory());
+  elements.clearAllDataBtn.addEventListener("click", () => void clearAllStoredData());
+  elements.diagnosticBtn.addEventListener("click", () => void downloadLocalDiagnostic());
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local") return;
-    if (changes.hiringPostHistory) {
-      savedHistory = sanitizeHistory(changes.hiringPostHistory.newValue);
-      renderHistoryStatus();
-      if (hiringStatus) renderHiringStatus(hiringStatus);
+    if (!["local", "session"].includes(areaName)) return;
+    if (changes.hiringPostHistory || changes.hiringSessionPostHistory) {
+      void refreshSavedHistory();
     }
-    if (changes.hiringReviewLabels) {
+    if (areaName === "local" && changes.hiringReviewLabels) {
       reviewLabels = sanitizeReviewLabels(changes.hiringReviewLabels.newValue);
       if (hiringStatus) renderHiringStatus(hiringStatus);
     }
@@ -1090,4 +1272,25 @@ window.addEventListener("unload", () => {
   if (saveTimer) clearTimeout(saveTimer);
 });
 
-void initialize();
+const popupApi = {
+  refreshAll,
+  refreshHiringStatus,
+  runMonitorCommand,
+  runScrollCommand,
+  setTargetTab,
+  isLinkedInFeedUrl,
+  getTargetState: () => ({
+    targetTabId,
+    targetWindowId,
+    activeTabId,
+    stateGeneration,
+    query: { ...resultQuery }
+  })
+};
+globalThis.__LI_FEED_POPUP__ = popupApi;
+if (typeof module !== "undefined" && module.exports) module.exports = popupApi;
+
+void initialize().catch(() => {
+  setGlobalNotice(t("notice.unavailable"), "error");
+  renderButtons();
+});

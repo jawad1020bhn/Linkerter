@@ -2,12 +2,12 @@
   "use strict";
 
   const classifier = globalThis.__LI_FEED_HIRING_CLASSIFIER__;
+  const shared = globalThis.__LI_FEED_SHARED__;
   if (!classifier) throw new Error("The local hiring classifier must load before the feed monitor.");
+  if (!shared) throw new Error("Shared primitives must load before the feed monitor.");
 
   const MAX_RESULTS = 80;
   const MAX_EXPORT_RECORDS = 1000;
-  const MAX_HISTORY_RECORDS = 500;
-  const MAX_HISTORY_BYTES = 3_000_000;
   const HISTORY_SAVE_DELAY_MS = 4_000;
   const METRICS_REFRESH_MS = 30_000;
   const MAX_QUEUE = 16;
@@ -46,13 +46,18 @@
   let processedCount = 0;
   let keepHistory = false;
   let historyRetentionDays = 30;
-  let historyRecords = [];
-  let historyLoaded = false;
-  let historyLoadPromise = Promise.resolve();
   let historyGeneration = 0;
   let historySaveTimer = null;
   let historySaveQueue = Promise.resolve();
   let historyLimitReached = false;
+  let historyMode = "off";
+  let historyCount = 0;
+  let historyError = null;
+  const pendingDelta = new Map();
+  const MONITOR_ID = globalThis.crypto?.randomUUID?.() || `feed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const classificationCache = new WeakMap();
+  const dirtyRoots = new Set();
+  const scanStats = { scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0, lastScanMs: 0, totalScanMs: 0, maxScanMs: 0 };
   let domHealth = {
     checks: 0,
     postRootsFound: 0,
@@ -78,8 +83,11 @@
     return classifier.normalizeText(`${element.getAttribute("aria-label") || ""} ${element.getAttribute("title") || ""} ${element.innerText || element.textContent || ""}`);
   }
 
-  function isSeeMoreControl(element) {
+  function isSeeMoreControl(element, body = null) {
+    if (!element || element.hidden || element.getAttribute("aria-hidden") === "true") return false;
+    if (body && !body.contains(element)) return false;
     const label = normalizeLabel(element);
+    if (/comments?|repl(?:y|ies)|reactions?|commentaires?|r[ée]pondre|تعليقات?|ردود|رد/iu.test(label)) return false;
     return MORE_LABELS.some((phrase) => label.includes(classifier.normalizeText(phrase)));
   }
 
@@ -155,9 +163,24 @@
     return roots;
   }
 
-  function findSeeMore(root) {
-    return Array.from(root.querySelectorAll("button,[role='button']"))
-      .find((button) => !button.disabled && button.getAttribute("aria-disabled") !== "true" && isSeeMoreControl(button));
+  function belongsToPostRoot(node, root) {
+    let current = node;
+    while (current) {
+      if (current === root) return true;
+      if (current !== node) {
+        const role = (current.getAttribute("role") || "").toLowerCase();
+        if (current.tagName === "ARTICLE" || role === "article" || current.hasAttribute("data-urn") ||
+            /urn:li:(?:activity|share|ugcpost):/i.test(current.getAttribute("data-id") || "")) return false;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function findSeeMore(root, body = findBodyNode(root)) {
+    if (!body) return null;
+    return Array.from(body.querySelectorAll("button,[role='button']"))
+      .find((button) => !button.disabled && button.getAttribute("aria-disabled") !== "true" && isSeeMoreControl(button, body));
   }
 
   function findBodyNode(root, control = null) {
@@ -171,7 +194,7 @@
     ];
     for (const selector of selectors) {
       const nodes = Array.from(root.querySelectorAll(selector))
-        .filter((node) => !node.querySelector("article,[role='article']"))
+        .filter((node) => belongsToPostRoot(node, root) && !node.querySelector("article,[role='article']"))
         .sort((a, b) => (b.textContent || "").length - (a.textContent || "").length);
       if (nodes.length) return nodes[0];
     }
@@ -202,23 +225,22 @@
   }
 
   function getPostTextDetails(root) {
-    const control = findSeeMore(root);
-    const body = findBodyNode(root, control);
-    const visibleText = cleanText(body.innerText || body.textContent || "");
-    const rawText = cleanText(body.textContent || visibleText);
-    const style = window.getComputedStyle(body);
-    const hasHiddenTextInDom = rawText.length > visibleText.length + 24;
-    const clampValue = style.webkitLineClamp || style.lineClamp || "none";
-    const hasVisualClamp = Boolean(clampValue && clampValue !== "none" && clampValue !== "0");
-    const hasOverflowingText = body.scrollHeight > body.clientHeight + 10 || hasVisualClamp;
-    const fullTextAvailableWithoutExpansion = !control || hasHiddenTextInDom || hasOverflowingText;
-    const text = hasHiddenTextInDom ? rawText : visibleText;
-
+    const body = findBodyNode(root);
+    const control = findSeeMore(root, body);
+    let fallbackText = "";
+    if (typeof body.innerText === "string") fallbackText = body.innerText;
+    else {
+      const visibleClone = body.cloneNode(true);
+      visibleClone.querySelectorAll("[hidden],[aria-hidden='true'],.visually-hidden").forEach((node) => node.remove());
+      fallbackText = visibleClone.textContent || "";
+    }
+    const text = cleanText(fallbackText || body.textContent || "");
+    const fullTextAvailableWithoutExpansion = !control && body !== root;
     return {
       text,
       control,
       body,
-      partial: Boolean(control && !fullTextAvailableWithoutExpansion),
+      partial: Boolean(control) || body === root,
       fullTextAvailableWithoutExpansion
     };
   }
@@ -314,7 +336,8 @@
   function getPostPermalink(root, hrefs = getHrefs(root)) {
     for (const href of hrefs) {
       const absolute = toAbsoluteHttpUrl(href);
-      if (absolute && /\/(?:feed\/update|posts)\/|activity[-/]/i.test(absolute)) return absolute;
+      const canonical = shared.canonicalizeLinkedInUrl(absolute, "permalink");
+      if (canonical) return canonical;
     }
     return null;
   }
@@ -326,7 +349,7 @@
     let name = null;
     for (const selector of nameSelectors) {
       const node = Array.from(root.querySelectorAll(selector))
-        .find((item) => cleanText(item.innerText || item.textContent || "").length > 1);
+        .find((item) => belongsToPostRoot(item, root) && cleanText(item.innerText || item.textContent || "").length > 1);
       if (node) {
         name = cleanText(node.innerText || node.textContent || "").slice(0, 120);
         break;
@@ -335,8 +358,9 @@
     let profileUrl = null;
     for (const href of hrefs) {
       const absolute = toAbsoluteHttpUrl(href);
-      if (absolute && /linkedin\.com\/(?:in|company)\//i.test(absolute)) {
-        profileUrl = absolute;
+      const canonical = shared.canonicalizeLinkedInUrl(absolute, "profile");
+      if (canonical) {
+        profileUrl = canonical;
         break;
       }
     }
@@ -346,7 +370,9 @@
   function asciiDigits(value) {
     return String(value || "")
       .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
-      .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
+      .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+      .replace(/٫/g, ".")
+      .replace(/٬/g, ",");
   }
 
   function findAgeLabel(value) {
@@ -408,7 +434,10 @@
     for (const node of nodes) {
       const dateValue = node.getAttribute("datetime") || node.getAttribute("data-timestamp");
       if (dateValue && !publishedAt) {
-        const parsed = Date.parse(dateValue);
+        const numeric = String(dateValue).trim();
+        const parsed = /^\d{10}$/u.test(numeric) ? Number(numeric) * 1000
+          : /^\d{13}$/u.test(numeric) ? Number(numeric)
+            : Date.parse(dateValue);
         if (Number.isFinite(parsed)) publishedAt = new Date(parsed).toISOString();
       }
       const candidate = findAgeLabel(`${node.getAttribute("aria-label") || ""} ${node.getAttribute("title") || ""} ${node.innerText || node.textContent || ""}`);
@@ -428,7 +457,7 @@
 
   function parseMetricNumber(value) {
     const text = asciiDigits(value).toLowerCase();
-    const match = text.match(/(\d[\d.,]*)(?:\s*([kmb]))?/i);
+    const match = text.match(/(\d[\d.,]*)(?:\s*([kmb]|ألف|الف|مليون|مليار))?/iu);
     if (!match) return null;
     let numberText = match[1];
     const suffix = match[2] || "";
@@ -439,7 +468,9 @@
     } else if (!suffix && /\.\d{3}$/u.test(numberText)) numberText = numberText.replace(/\./g, "");
     const number = Number(numberText);
     if (!Number.isFinite(number)) return null;
-    const multiplier = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
+    const multiplier = ["k", "ألف", "الف"].includes(suffix) ? 1_000
+      : ["m", "مليون"].includes(suffix) ? 1_000_000
+        : ["b", "مليار"].includes(suffix) ? 1_000_000_000 : 1;
     return Math.round(number * multiplier);
   }
 
@@ -449,9 +480,9 @@
     if (!metricMatch) return null;
     const before = text.slice(0, metricMatch.index);
     const after = text.slice(metricMatch.index + metricMatch[0].length);
-    const numberAfter = after.match(/^\s*(?:[:(·—-]\s*)?(\d[\d.,]*\s*[kmb]?)/i);
+    const numberAfter = after.match(/^\s*(?:[:(·—-]\s*)?(\d[\d.,]*\s*(?:[kmb]|ألف|الف|مليون|مليار)?)/iu);
     if (numberAfter) return parseMetricNumber(numberAfter[1]);
-    const numberBefore = Array.from(before.matchAll(/(\d[\d.,]*\s*[kmb]?)/gi));
+    const numberBefore = Array.from(before.matchAll(/(\d[\d.,]*\s*(?:[kmb]|ألف|الف|مليون|مليار)?)/giu));
     return numberBefore.length ? parseMetricNumber(numberBefore[numberBefore.length - 1][1]) : null;
   }
 
@@ -461,7 +492,7 @@
       reactions: /reactions?|likes?|réactions?|j['’]aime|تفاعل|إعجاب|اعجاب/iu,
       comments: /comments?|commentaires?|تعليقات|تعليق/iu,
       reposts: /reposts?|shares?|partages?|إعادة النشر|إعادة نشر|مشاركة/iu,
-      views: /impressions?|views?|vues?|مشاهدات|مرات الظهور/iu
+      views: /impressions?|views?|vues?|مشاهدة|مشاهدات|مرات الظهور/iu
     };
     const metrics = {};
     for (const [metric, pattern] of Object.entries(metricPatterns)) {
@@ -489,20 +520,17 @@
 
   function getArchiveKey(root, text) {
     const stableId = getStableId(root);
-    if (stableId) return `urn:${stableId}`;
     const permalink = getPostPermalink(root);
-    if (permalink) return `url:${permalink}`;
     const author = getAuthorDetails(root);
-    const identity = `${classifier.normalizeText(author.profileUrl || author.name || "")}|${classifier.normalizeText(text)}`;
-    return `text:${stableHash(identity)}`;
+    return shared.canonicalPostId({ id: stableId || undefined, permalink, author, fullText: text });
   }
 
   function createExportRecord(root, key, details, classification, category, previous, capturedAtMs) {
     const capturedAt = new Date(capturedAtMs).toISOString();
     const hrefs = getHrefs(root);
     const stableId = getStableId(root);
-    return {
-      id: stableId || key,
+    const record = {
+      id: key,
       sourcePostId: stableId || null,
       permalink: getPostPermalink(root, hrefs),
       author: getAuthorDetails(root, hrefs),
@@ -513,6 +541,7 @@
       signals: classification.signals,
       fullText: details.text,
       contentComplete: !details.partial,
+      extractionStatus: details.partial ? "partial" : "complete",
       firstSeenAt: previous?.firstSeenAt || capturedAt,
       lastSeenAt: capturedAt,
       postAge: getPostAge(root, capturedAtMs),
@@ -525,6 +554,16 @@
         links: extractPostLinks(hrefs)
       }
     };
+    return previous ? shared.mergePostRecords(previous, record) : record;
+  }
+
+  function extractPostRecord(root, { capturedAtMs = Date.now(), previous = null } = {}) {
+    const details = getPostTextDetails(root);
+    const hrefs = getHrefs(root);
+    const classification = classifier.classify(details.text, { hrefs });
+    const category = details.partial && classification.category === "none" ? "partial" : classification.category;
+    const key = getArchiveKey(root, details.text);
+    return createExportRecord(root, key, details, classification, category, previous, capturedAtMs);
   }
 
   function decrementArchiveRootCount(key) {
@@ -539,7 +578,7 @@
 
   function upsertExportRecord(root, details, classification, category) {
     const previousKey = archiveKeys.get(root);
-    if (category === "none") {
+    if (category === "none" || category === "partial") {
       if (previousKey) {
         archiveKeys.delete(root);
         decrementArchiveRootCount(previousKey);
@@ -564,7 +603,7 @@
       const record = createExportRecord(root, key, details, classification, category, previous, capturedAtMs);
       exportRecords.delete(key);
       exportRecords.set(key, record);
-      if (keepHistory) scheduleHistorySave();
+      queueHistoryDelta(record);
       while (exportRecords.size > MAX_EXPORT_RECORDS) {
         const oldestKey = exportRecords.keys().next().value;
         exportRecords.delete(oldestKey);
@@ -573,8 +612,10 @@
       }
     } else {
       const previousSeenAtMs = Date.parse(previous.lastSeenAt || "");
-      previous.lastSeenAt = new Date(capturedAtMs).toISOString();
-      if (keepHistory && (!Number.isFinite(previousSeenAtMs) || capturedAtMs - previousSeenAtMs >= 60_000)) scheduleHistorySave();
+      if (!Number.isFinite(previousSeenAtMs) || capturedAtMs - previousSeenAtMs >= 60_000) {
+        previous.lastSeenAt = new Date(capturedAtMs).toISOString();
+        queueHistoryDelta(previous);
+      }
     }
     archiveKeys.set(root, key);
   }
@@ -585,7 +626,7 @@
       supported: true,
       isFeed: isFeedPage(),
       ok: true,
-      schemaVersion: "1.0",
+      schemaVersion: shared.SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       scope: "All detected posts from the current monitor run, independent of the selected category filter.",
       monitorRun: {
@@ -607,116 +648,62 @@
     };
   }
 
-  function utf8ByteLength(value) {
-    let bytes = 0;
-    for (const character of String(value || "")) {
-      const codePoint = character.codePointAt(0);
-      bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
-    }
-    return bytes;
+  function queueHistoryDelta(record) {
+    if (!keepHistory || !record) return;
+    pendingDelta.set(record.id, record);
+    scheduleHistorySave();
   }
 
-  function pruneHistory(records, now = Date.now()) {
-    const cutoff = now - historyRetentionDays * 86_400_000;
-    const candidates = records.filter((record) => {
-      if (!record || typeof record !== "object") return false;
-      const timestamp = Date.parse(record.lastSeenAt || record.firstSeenAt || "");
-      return Number.isFinite(timestamp) && timestamp >= cutoff;
-    }).sort((a, b) => Date.parse(b.lastSeenAt || b.firstSeenAt) - Date.parse(a.lastSeenAt || a.firstSeenAt));
-
-    const kept = [];
-    let byteCount = 2;
-    let truncated = false;
-    for (const record of candidates) {
-      const size = utf8ByteLength(JSON.stringify(record)) + 1;
-      if (kept.length >= MAX_HISTORY_RECORDS || byteCount + size > MAX_HISTORY_BYTES) {
-        truncated = true;
-        continue;
+  function flushHistoryDelta(flushCoordinator = false) {
+    clearTimeout(historySaveTimer);
+    historySaveTimer = null;
+    historySaveQueue = historySaveQueue.then(async () => {
+      let response = { ok: true, flushed: 0 };
+      const batch = Array.from(pendingDelta.values());
+      if (batch.length && keepHistory) {
+        response = await chrome.runtime.sendMessage({ type: "HISTORY_DELTA", monitorId: MONITOR_ID, records: batch });
+        if (response?.ok) {
+          for (const record of batch) {
+            if (pendingDelta.get(record.id) === record) pendingDelta.delete(record.id);
+          }
+        }
       }
-      kept.push(record);
-      byteCount += size;
-    }
-    return { records: kept, truncated };
-  }
-
-  async function loadHistoryFromStorage() {
-    if (historyLoaded) return;
-    historyLoadPromise = (async () => {
-      try {
-        const stored = await chrome.storage.local.get({ hiringPostHistory: [] });
-        const original = Array.isArray(stored.hiringPostHistory) ? stored.hiringPostHistory : [];
-        const pruned = pruneHistory(original);
-        historyRecords = pruned.records;
-        historyLimitReached = pruned.truncated;
-        historyLoaded = true;
-        if (historyRecords.length !== original.length) scheduleHistorySave();
-      } catch (_error) {
-        historyRecords = [];
-        historyLoaded = true;
+      if (flushCoordinator) {
+        const flushed = await chrome.runtime.sendMessage({ type: "HISTORY_FLUSH", monitorId: MONITOR_ID });
+        response = { ...response, ...flushed };
       }
-    })();
-    await historyLoadPromise;
-  }
-
-  async function persistHistory(expectedGeneration = historyGeneration) {
-    if (!keepHistory || expectedGeneration !== historyGeneration) return;
-    await loadHistoryFromStorage();
-    if (!keepHistory || expectedGeneration !== historyGeneration) return;
-    try {
-      const stored = await chrome.storage.local.get({
-        hiringPostHistory: [],
-        hiringPreferences: { keepHistory }
-      });
-      if (!keepHistory || expectedGeneration !== historyGeneration || stored.hiringPreferences?.keepHistory === false) return;
-      const merged = new Map();
-      const existing = Array.isArray(stored.hiringPostHistory) ? stored.hiringPostHistory : historyRecords;
-      for (const record of existing) {
-        if (!record || typeof record !== "object") continue;
-        const key = String(record.id || record.permalink || "");
-        if (key) merged.set(key, record);
-      }
-      for (const record of exportRecords.values()) {
-        const key = String(record.id || record.permalink || "");
-        if (!key) continue;
-        const previous = merged.get(key);
-        if (!previous || Date.parse(record.lastSeenAt) >= Date.parse(previous.lastSeenAt || previous.firstSeenAt)) merged.set(key, record);
-      }
-      const pruned = pruneHistory(Array.from(merged.values()));
-      historyRecords = pruned.records;
-      historyLimitReached = pruned.truncated;
-      if (!keepHistory || expectedGeneration !== historyGeneration) return;
-      await chrome.storage.local.set({ hiringPostHistory: historyRecords });
-    } catch (_error) {
-      historyLimitReached = true;
-    }
+      if (response && Number.isFinite(response.count)) historyCount = response.count;
+      if (response && typeof response.limitReached === "boolean") historyLimitReached = response.limitReached;
+      historyError = response?.ok === false ? response.error || "storage_unavailable" : null;
+      return response;
+    }).catch((error) => {
+      historyError = "storage_unavailable";
+      return { ok: false, error: historyError, message: String(error?.message || error) };
+    });
+    return historySaveQueue;
   }
 
   function scheduleHistorySave(immediate = false) {
-    if (!keepHistory) return;
+    if (!keepHistory) return Promise.resolve({ ok: false, error: "history_disabled" });
+    if (immediate) return flushHistoryDelta(false);
     clearTimeout(historySaveTimer);
-    historySaveTimer = null;
-    const expectedGeneration = historyGeneration;
-    if (immediate) {
-      historySaveQueue = historySaveQueue.then(() => persistHistory(expectedGeneration)).catch(() => {});
-    } else {
-      historySaveTimer = setTimeout(() => {
-        historySaveTimer = null;
-        scheduleHistorySave(true);
-      }, HISTORY_SAVE_DELAY_MS);
-    }
+    historySaveTimer = setTimeout(() => {
+      historySaveTimer = null;
+      void flushHistoryDelta(false);
+    }, HISTORY_SAVE_DELAY_MS);
+    return Promise.resolve({ ok: true, scheduled: true });
   }
 
   function configureHistory(options = {}) {
-    const retentionOptions = [7, 30, 90];
-    const previousKeepHistory = keepHistory;
-    const previousRetentionDays = historyRetentionDays;
-    if (typeof options.keepHistory === "boolean") keepHistory = options.keepHistory;
+    const previousMode = historyMode;
+    if (["off", "session", "persistent"].includes(options.historyMode)) historyMode = options.historyMode;
+    else if (typeof options.keepHistory === "boolean") historyMode = options.keepHistory ? "persistent" : "off";
+    keepHistory = historyMode !== "off";
     const requestedDays = Number(options.historyRetentionDays);
-    if (retentionOptions.includes(requestedDays)) historyRetentionDays = requestedDays;
-    if (previousKeepHistory !== keepHistory || previousRetentionDays !== historyRetentionDays) historyGeneration += 1;
-    if (keepHistory) {
-      void loadHistoryFromStorage().then(() => scheduleHistorySave(true));
-    } else {
+    if ([7, 30, 90].includes(requestedDays)) historyRetentionDays = requestedDays;
+    if (previousMode !== historyMode) historyGeneration += 1;
+    if (!keepHistory) {
+      pendingDelta.clear();
       clearTimeout(historySaveTimer);
       historySaveTimer = null;
     }
@@ -728,6 +715,15 @@
     filterStyle.setAttribute("data-li-feed-hiring-filter-style", "true");
     filterStyle.textContent = '[data-li-feed-hiring-filter-hidden="true"]{display:none!important;}';
     (document.head || document.documentElement).appendChild(filterStyle);
+  }
+
+  function reconcileFilterArtifacts(scope = document) {
+    scope.querySelectorAll("[data-li-feed-hiring-filter-hidden='true']").forEach((node) => {
+      node.removeAttribute("data-li-feed-hiring-filter-hidden");
+    });
+    scope.querySelectorAll("[data-li-feed-hiring-filter-style='true']").forEach((node) => node.remove());
+    filteredRoots.clear();
+    filterStyle = null;
   }
 
   function restoreHiddenPosts() {
@@ -778,21 +774,32 @@
     }
 
     const details = getPostTextDetails(root);
+    const hrefs = getHrefs(root);
+    const fingerprint = JSON.stringify([details.text, details.partial, hrefs]);
     domHealth.scannedCards += 1;
     if (details.body !== root) domHealth.textSelectorMatches += 1;
     else domHealth.textFallbacks += 1;
     if (details.control) domHealth.seeMoreControls += 1;
 
-    const classification = classifier.classify(details.text, { hrefs: getHrefs(root) });
-    let category = classification.category;
-    if (details.partial && category === "none") category = "partial";
+    let cached = classificationCache.get(root);
+    if (!cached || cached.fingerprint !== fingerprint) {
+      const classification = classifier.classify(details.text, { hrefs });
+      cached = {
+        fingerprint,
+        classification,
+        category: details.partial && classification.category === "none" ? "partial" : classification.category
+      };
+      classificationCache.set(root, cached);
+      scanStats.classifications += 1;
+    } else scanStats.cacheHits += 1;
+    const { classification, category } = cached;
     upsertExportRecord(root, details, classification, category);
 
-    if (category === "none") {
+    if (category === "none" || category === "partial") {
       results.delete(root);
     } else {
       results.set(root, {
-        id: getStableId(root) || archiveKeys.get(root) || getArchiveKey(root, details.text),
+        id: archiveKeys.get(root) || getArchiveKey(root, details.text),
         category,
         confidence: details.partial ? "partial" : classification.confidence,
         score: classification.score,
@@ -801,17 +808,47 @@
         snippet: details.text.slice(0, 230),
         updatedAt: Date.now()
       });
-      while (results.size > MAX_RESULTS) {
-        const oldest = results.keys().next().value;
-        results.delete(oldest);
-      }
+      while (results.size > MAX_RESULTS) results.delete(results.keys().next().value);
     }
 
     applyFeedFilter(root, category, details.partial);
-
     if (details.partial && autoExpand && details.control && isElementVisible(details.control)) {
       queueExpansion(root, details.control);
     }
+  }
+
+  async function expandPost(root, initialDetails, options = {}) {
+    const maxAttempts = Math.max(1, Number(options.maxAttempts) || 2);
+    const waitMs = Math.max(0, Number(options.waitMs) || 0);
+    const state = options.state || { attempts: 0, status: "pending" };
+    if (state.status === "expanded" || state.status === "failed") {
+      return { status: state.status, attempts: state.attempts, state };
+    }
+    let details = initialDetails;
+    while (state.attempts < maxAttempts) {
+      const control = details && details.control;
+      const body = details && details.body;
+      if (!root.isConnected || !control || !control.isConnected || !body || !isSeeMoreControl(control, body)) {
+        state.status = "failed";
+        break;
+      }
+      const beforeText = body.textContent || "";
+      const beforeLabel = normalizeLabel(control);
+      if (document.visibilityState === "visible") window.dispatchEvent(new Event("li-feed-auto-expand-start"));
+      control.click();
+      state.attempts += 1;
+      await sleep(waitMs);
+      if (!root.isConnected) { state.status = "failed"; break; }
+      const next = getPostTextDetails(root);
+      const changed = (next.body.textContent || "") !== beforeText || !next.control || normalizeLabel(next.control) !== beforeLabel;
+      if (changed && !next.partial) {
+        state.status = "expanded";
+        return { status: "expanded", attempts: state.attempts, state };
+      }
+      details = next;
+    }
+    state.status = "failed";
+    return { status: "failed", attempts: state.attempts, state };
   }
 
   function queueExpansion(root, control) {
@@ -833,11 +870,7 @@
       if (!item.root.isConnected || !item.control.isConnected || !isSeeMoreControl(item.control) || !isElementVisible(item.control)) continue;
 
       attemptedRoots.add(item.root);
-      // In the foreground, pause auto-scroll briefly while the card expands. In a hidden tab,
-      // keep the background scroll session running and let its adaptive layout feedback compensate.
-      if (document.visibilityState === "visible") window.dispatchEvent(new Event("li-feed-auto-expand-start"));
-      item.control.click();
-      await sleep(700);
+      await expandPost(item.root, getPostTextDetails(item.root), { maxAttempts: 2, waitMs: 700 });
       if (monitoring && generation === monitorGeneration && item.root.isConnected) updatePost(item.root);
     }
 
@@ -854,10 +887,10 @@
     }
   }
 
-  function scan() {
+  async function scan() {
     if (!monitoring) return;
     if (!isFeedPage()) {
-      stopMonitor();
+      await stopMonitor();
       return;
     }
     if (scanning) {
@@ -866,73 +899,138 @@
     }
 
     scanning = true;
-    const roots = collectPostRoots();
-    const background = document.visibilityState !== "visible";
-    const candidates = background ? roots : roots.filter(isCardNearViewport);
-    domHealth.checks += 1;
-    domHealth.postRootsFound = roots.length;
-    domHealth.scannedCards = 0;
-    domHealth.textSelectorMatches = 0;
-    domHealth.textFallbacks = 0;
-    domHealth.seeMoreControls = 0;
-    for (const root of candidates) updatePost(root, background);
-    domHealth.lastScanAt = new Date().toISOString();
-    if (!roots.length) {
-      domHealth.level = domHealth.checks >= 3 ? "warning" : "checking";
-      domHealth.message = domHealth.checks >= 3
-        ? "No feed post cards matched. LinkedIn may have changed its page structure."
-        : "Checking the feed for post cards…";
-    } else if (domHealth.textSelectorMatches === 0 && domHealth.textFallbacks > 0) {
-      domHealth.level = "partial";
-      domHealth.message = `Found ${roots.length} card(s); using card-level text fallback. Inspect DOM compatibility if results look incomplete.`;
-    } else {
-      domHealth.level = "ok";
-      domHealth.message = `${roots.length} post card(s) matched; ${domHealth.scannedCards} inspected${background ? " in the background tab" : " near the viewport"}; text selectors ${domHealth.textSelectorMatches}, fallback ${domHealth.textFallbacks}, see-more controls ${domHealth.seeMoreControls}.`;
+    const scanStartedAt = globalThis.performance?.now?.() ?? Date.now();
+    scanStats.scans += 1;
+    try {
+      const roots = collectPostRoots();
+      const background = document.visibilityState !== "visible";
+      const candidates = background ? roots : roots.filter(isCardNearViewport);
+      candidates.sort((a, b) => Number(dirtyRoots.has(b)) - Number(dirtyRoots.has(a)));
+      domHealth.checks += 1;
+      domHealth.postRootsFound = roots.length;
+      domHealth.scannedCards = 0;
+      domHealth.textSelectorMatches = 0;
+      domHealth.textFallbacks = 0;
+      domHealth.seeMoreControls = 0;
+      for (let offset = 0; offset < candidates.length; offset += 25) {
+        const batch = candidates.slice(offset, offset + 25);
+        for (const root of batch) {
+          if (dirtyRoots.has(root)) scanStats.dirtyProcessed += 1;
+          updatePost(root, background);
+          dirtyRoots.delete(root);
+        }
+        scanStats.batches += 1;
+        if (offset + 25 < candidates.length) await sleep(0);
+      }
+      domHealth.lastScanAt = new Date().toISOString();
+      if (!roots.length) {
+        domHealth.level = domHealth.checks >= 3 ? "warning" : "checking";
+        domHealth.message = domHealth.checks >= 3
+          ? "No feed post cards matched. LinkedIn may have changed its page structure."
+          : "Checking the feed for post cards…";
+      } else if (domHealth.textSelectorMatches === 0 && domHealth.textFallbacks > 0) {
+        domHealth.level = "partial";
+        domHealth.message = `Found ${roots.length} card(s); using card-level text fallback. Inspect DOM compatibility if results look incomplete.`;
+      } else {
+        domHealth.level = "ok";
+        domHealth.message = `${roots.length} post card(s) matched; ${domHealth.scannedCards} inspected${background ? " in the background tab" : " near the viewport"}; text selectors ${domHealth.textSelectorMatches}, fallback ${domHealth.textFallbacks}, see-more controls ${domHealth.seeMoreControls}.`;
+      }
+      cleanDisconnectedResults();
+    } finally {
+      const duration = Math.max(0, (globalThis.performance?.now?.() ?? Date.now()) - scanStartedAt);
+      scanStats.lastScanMs = duration;
+      scanStats.totalScanMs += duration;
+      scanStats.maxScanMs = Math.max(scanStats.maxScanMs, duration);
+      scanning = false;
     }
-    cleanDisconnectedResults();
-    scanning = false;
     if (scanAgain) {
       scanAgain = false;
       scheduleScan(50);
-    } else {
-      // Poll loaded cards so the monitor and DOM health check continue in a hidden tab.
-      scheduleScan(background ? 5_000 : 1_800);
-    }
+    } else scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800);
   }
 
   function scheduleScan(delay = 250) {
-    if (!monitoring) return;
-    clearTimeout(scheduledScan);
-    scheduledScan = setTimeout(scan, delay);
+    if (!monitoring || scheduledScan !== null) return;
+    scheduledScan = setTimeout(() => {
+      scheduledScan = null;
+      void scan();
+    }, delay);
   }
 
-  function getStatus() {
-    cleanDisconnectedResults();
-    const counts = {
-      open_role: 0,
-      recruiter_search: 0,
-      possible: 0,
-      job_seeker: 0,
-      hiring_discussion: 0,
-      closed: 0,
-      partial: 0
+  function markDirtyFromMutations(mutations) {
+    for (const mutation of mutations) {
+      const target = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
+      const root = target ? findPostRoot(target) : null;
+      if (root) dirtyRoots.add(root);
+      for (const node of mutation.addedNodes || []) {
+        if (node.nodeType !== 1) continue;
+        const ownRoot = findPostRoot(node);
+        if (ownRoot) dirtyRoots.add(ownRoot);
+        for (const addedRoot of findPostRootsInScope(node)) dirtyRoots.add(addedRoot);
+      }
+    }
+  }
+
+  function summarizeRecord(record) {
+    return {
+      id: record.id,
+      category: record.category,
+      confidence: record.confidence,
+      score: record.score,
+      evidence: Array.isArray(record.evidence) ? record.evidence.slice(0, 4) : [],
+      snippet: String(record.fullText || "").slice(0, 230),
+      author: record.author || { name: null, profileUrl: null },
+      permalink: record.permalink || null,
+      firstSeenAt: record.firstSeenAt,
+      lastSeenAt: record.lastSeenAt,
+      contentComplete: record.contentComplete !== false,
+      extractionStatus: record.extractionStatus || (record.contentComplete === false ? "partial" : "complete"),
+      metrics: record.metrics || null
     };
-    const uniqueResults = new Map();
-    for (const result of results.values()) {
-      const key = String(result.id || `${result.category}:${result.snippet || ""}`);
-      const previous = uniqueResults.get(key);
-      if (!previous || result.updatedAt > previous.updatedAt) uniqueResults.set(key, result);
-    }
-    const uniqueResultValues = Array.from(uniqueResults.values());
-    for (const result of uniqueResultValues) {
-      if (Object.hasOwn(counts, result.category)) counts[result.category] += 1;
-    }
-    const resultList = uniqueResultValues
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, 50);
+  }
+
+  function queryRecords(records, query = {}) {
+    const filter = shared.FILTERS.includes(query.filter) ? query.filter : "all";
+    const search = classifier.normalizeText(query.search || "");
+    const filtered = Array.from(records || []).filter((record) => {
+      if (!record || (filter !== "all" && record.category !== filter)) return false;
+      if (!search) return true;
+      const haystack = classifier.normalizeText([
+        record.fullText, record.category, record.author?.name,
+        ...(record.evidence || []), ...(record.extracted?.jobTitles || []), ...(record.extracted?.hashtags || [])
+      ].join(" "));
+      return haystack.includes(search);
+    });
+    const direction = query.sort === "oldest" ? 1 : -1;
+    filtered.sort((a, b) => {
+      const aTime = Date.parse(a.lastSeenAt || a.firstSeenAt || "") || 0;
+      const bTime = Date.parse(b.lastSeenAt || b.firstSeenAt || "") || 0;
+      return direction * (aTime - bTime) || String(a.id).localeCompare(String(b.id));
+    });
+    const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 25));
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(totalPages, Math.max(1, Number(query.page) || 1));
+    const start = (page - 1) * pageSize;
+    return {
+      results: filtered.slice(start, start + pageSize).map(summarizeRecord),
+      total,
+      page,
+      pageSize,
+      hasMore: start + pageSize < total
+    };
+  }
+
+  function getStatus(query = {}) {
+    cleanDisconnectedResults();
+    const counts = Object.fromEntries(shared.CATEGORIES.map((category) => [category, 0]));
+    const archive = Array.from(exportRecords.values());
+    for (const record of archive) if (Object.hasOwn(counts, record.category)) counts[record.category] += 1;
+    const page = queryRecords(archive, { ...query, filter: query.filter || activeFilter });
     return {
       supported: true,
       isFeed: isFeedPage(),
+      ok: true,
       monitoring,
       autoExpand,
       activeFilter,
@@ -942,22 +1040,25 @@
       archiveLimit: MAX_EXPORT_RECORDS,
       archiveLimitReached,
       duplicateMergedCount,
-      historyEnabled: keepHistory,
+      historyMode,
       historyRetentionDays,
-      historyCount: historyRecords.length,
+      historyCount,
       historyLimitReached,
+      historyError,
+      scan: { ...scanStats },
       domHealth: {
         ...domHealth,
         background: document.visibilityState !== "visible",
-        postsWithAge: Array.from(exportRecords.values()).filter((record) => record.postAge?.label || record.postAge?.publishedAt).length,
-        postsWithMetrics: Array.from(exportRecords.values()).filter((record) => Object.values(record.metrics || {}).some((count) => count !== null && count !== undefined)).length
+        postsWithAge: archive.filter((record) => record.postAge?.label || record.postAge?.publishedAt).length,
+        postsWithMetrics: archive.filter((record) => Object.values(record.metrics || {}).some((count) => count !== null && count !== undefined)).length
       },
       counts,
-      results: resultList
+      ...page
     };
   }
 
   function startMonitor(options = {}) {
+    reconcileFilterArtifacts();
     if (!isFeedPage()) return { supported: true, isFeed: false, ok: false, error: "Open the LinkedIn feed first." };
     const nextFilter = typeof options.filter === "string" ? options.filter : activeFilter;
     const nextMatchesOnly = options.matchesOnly === true;
@@ -980,6 +1081,10 @@
       monitorStartedAt = new Date().toISOString();
       monitorStoppedAt = null;
       processedCount = 0;
+      pendingDelta.clear();
+      dirtyRoots.clear();
+      historyError = null;
+      Object.assign(scanStats, { scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0, lastScanMs: 0, totalScanMs: 0, maxScanMs: 0 });
       domHealth = {
         checks: 0, postRootsFound: 0, scannedCards: 0, textSelectorMatches: 0,
         textFallbacks: 0, seeMoreControls: 0, postsWithAge: 0, postsWithMetrics: 0,
@@ -994,7 +1099,10 @@
       // hidden-tab passes inspect loaded cards only and never scroll the page.
       const scope = document.body;
       if (scope) {
-        observer = new MutationObserver(() => scheduleScan(220));
+        observer = new MutationObserver((mutations) => {
+          markDirtyFromMutations(mutations);
+          scheduleScan(220);
+        });
         observer.observe(scope, { childList: true, subtree: true, characterData: true });
       }
       scrollListener = () => scheduleScan(180);
@@ -1009,11 +1117,12 @@
     return { supported: true, isFeed: true, ok: true, status: getStatus() };
   }
 
-  function stopMonitor() {
+  async function stopMonitor() {
     if (monitoring) monitorStoppedAt = new Date().toISOString();
     monitoring = false;
     monitorGeneration += 1;
     restoreHiddenPosts();
+    reconcileFilterArtifacts();
     if (observer) observer.disconnect();
     observer = null;
     if (scrollListener) document.removeEventListener("scroll", scrollListener, true);
@@ -1023,8 +1132,14 @@
     clearTimeout(scheduledScan);
     scheduledScan = null;
     expansionQueue = [];
-    if (keepHistory) scheduleHistorySave(true);
-    return { supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() };
+    const flushed = await flushHistoryDelta(true);
+    return {
+      supported: true,
+      isFeed: isFeedPage(),
+      ok: flushed?.ok !== false,
+      ...(flushed?.ok === false ? { error: flushed.error || "storage_unavailable" } : {}),
+      status: getStatus()
+    };
   }
 
   function setOptions(options = {}) {
@@ -1040,12 +1155,43 @@
     return { supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() };
   }
 
+  const monitorApi = {
+    isSeeMoreControl,
+    getPostTextDetails,
+    extractPostRecord,
+    expandPost,
+    reconcileFilterArtifacts,
+    getPostAge,
+    parseMetricNumber,
+    parseMetricCount,
+    getPostPermalink,
+    getAuthorDetails,
+    getArchiveKey,
+    queryRecords,
+    startMonitor,
+    stopMonitor,
+    setOptions,
+    scan,
+    scheduleScan,
+    updatePost,
+    getStatus,
+    getExportPayload,
+    flushHistoryDelta
+  };
+  globalThis.__LI_FEED_HIRING_MONITOR__ = monitorApi;
+  if (typeof module !== "undefined" && module.exports) module.exports = monitorApi;
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== "string") return false;
     switch (message.type) {
       case "GET_HIRING_STATUS":
-        sendResponse(getStatus());
+        sendResponse(getStatus(message.query || {}));
         return false;
+      case "GET_HIRING_POST": {
+        const post = exportRecords.get(String(message.id || ""));
+        sendResponse(post ? { ok: true, post } : { ok: false, error: "not_found" });
+        return false;
+      }
       case "EXPORT_HIRING_POSTS":
         sendResponse(getExportPayload());
         return false;
@@ -1053,8 +1199,8 @@
         sendResponse(startMonitor(message.options || {}));
         return false;
       case "STOP_HIRING_MONITOR":
-        sendResponse(stopMonitor());
-        return false;
+        void stopMonitor().then(sendResponse);
+        return true;
       case "SET_HIRING_OPTIONS":
         sendResponse(setOptions(message.options || {}));
         return false;
@@ -1077,34 +1223,12 @@
   if (chrome.storage?.onChanged?.addListener) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "local") return;
-      if (changes.hiringPostHistory) {
-        const nextHistory = changes.hiringPostHistory.newValue;
-        if (Array.isArray(nextHistory)) {
-          const pruned = pruneHistory(nextHistory);
-          historyRecords = pruned.records;
-          historyLimitReached = pruned.truncated;
-        } else {
-          historyRecords = [];
-          historyLimitReached = false;
-        }
-        historyLoaded = true;
-        clearTimeout(historySaveTimer);
-        historySaveTimer = null;
-      }
-      if (changes.hiringPreferences?.newValue && typeof changes.hiringPreferences.newValue === "object") {
-        const preferences = changes.hiringPreferences.newValue;
-        const nextFilter = typeof preferences.filter === "string" ? preferences.filter : activeFilter;
-        const nextMatchesOnly = typeof preferences.matchesOnly === "boolean" ? preferences.matchesOnly : matchesOnly;
-        if (activeFilter !== nextFilter || matchesOnly !== nextMatchesOnly) restoreHiddenPosts();
-        activeFilter = nextFilter;
-        matchesOnly = nextMatchesOnly;
-        if (typeof preferences.autoExpand === "boolean") setAutoExpand(preferences.autoExpand);
+      const preferences = changes.hiringPreferences?.newValue;
+      if (preferences && typeof preferences === "object") {
         configureHistory({
-          keepHistory: preferences.keepHistory === true,
+          historyMode: preferences.historyMode,
           historyRetentionDays: preferences.historyRetentionDays
         });
-        if (monitoring && matchesOnly) ensureFilterStyle();
-        if (monitoring) scheduleScan(50);
       }
     });
   }

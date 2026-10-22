@@ -110,9 +110,12 @@
     ],
 
     closedOrNegative: [
-      "not hiring", "we are not hiring", "we're not hiring", "no open roles", "no open positions",
+      "not hiring", "we are not hiring", "we're not hiring", "not currently hiring", "not actively hiring",
+      "no longer hiring", "not recruiting", "not currently recruiting", "not actively recruiting",
+      "no longer recruiting", "not looking for candidates", "no longer looking for candidates", "no open roles", "no open positions",
       "position filled", "role has been filled", "applications closed", "hiring freeze", "no longer accepting applications",
-      "job cancelled", "job canceled", "not accepting applications", "nous ne recrutons pas", "aucun poste ouvert",
+      "job cancelled", "job canceled", "not accepting applications", "nous ne recrutons pas", "ne recrutons plus",
+      "ne recherchons plus", "aucun poste ouvert",
       "poste pourvu", "poste déjà pourvu", "candidatures clôturées", "recrutement suspendu", "offre expirée",
       "لا نوظف حاليا", "لا نوظف حاليًا", "لا توجد وظائف شاغرة", "تم شغل المنصب", "تم إغلاق التقديم",
       "التقديم مغلق", "تم إلغاء الوظيفة", "التوظيف متوقف", "توقف التوظيف"

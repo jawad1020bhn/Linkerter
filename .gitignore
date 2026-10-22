@@ -15,5 +15,9 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
-# Built extension archive
+# Built extension archives and test evidence
 linkedin-feed-scroller.zip
+linkedin-feed-scroller-store.zip
+dist/
+test-results/
+coverage/

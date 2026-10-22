@@ -1,0 +1,61 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked development dependencies
+        run: npm ci
+      - name: Run unit, integration, DOM, and release tests
+        run: npm test
+      - name: Verify Superpowers and runtime integrity
+        run: bash scripts/verify-superpowers.sh
+      - name: Verify release archives independently
+        run: node --test tests/integration/package.test.js
+      - name: Run real MV3 Chrome integration
+        run: npm run test:browser
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          REQUIRE_CHROME: 1
+      - name: Upload real-browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkerter-browser-${{ github.sha }}
+          path: |
+            test-results/browser/summary.json
+            docs/store/screenshots/*.png
+          if-no-files-found: ignore
+      - name: Build deterministic release candidates twice
+        run: |
+          bash scripts/package-extension.sh --unpacked /tmp/linkerter-unpacked-a.zip
+          bash scripts/package-extension.sh --store /tmp/linkerter-store-a.zip
+          bash scripts/package-extension.sh --unpacked /tmp/linkerter-unpacked-b.zip
+          bash scripts/package-extension.sh --store /tmp/linkerter-store-b.zip
+          cmp /tmp/linkerter-unpacked-a.zip /tmp/linkerter-unpacked-b.zip
+          cmp /tmp/linkerter-store-a.zip /tmp/linkerter-store-b.zip
+          git diff --check
+      - name: Upload reproducible candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkerter-${{ github.sha }}
+          path: |
+            /tmp/linkerter-unpacked-a.zip
+            /tmp/linkerter-store-a.zip
+          retention-days: 14

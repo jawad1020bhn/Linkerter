@@ -79,10 +79,23 @@ pass "hooks/session-start emits valid bootstrap JSON"
 
 echo "=== Verifying Linkerter Chrome Extension integrity ==="
 
-for js in content.js popup.js linkedin-hiring-rules.js linkedin-hiring-classifier.js linkedin-hiring-monitor.js; do
+for js in linkedin-shared.js background.js content.js popup-i18n.js popup-export.js popup-results.js popup.js linkedin-hiring-rules.js linkedin-hiring-classifier.js linkedin-hiring-monitor.js; do
   node --check "$REPO_ROOT/$js" || fail "Syntax error in $js"
 done
-pass "All 5 Chrome Extension JavaScript files pass node --check"
+pass "All 10 Chrome Extension JavaScript files pass node --check"
+
+for script in scripts/generate-icons.cjs tests/browser/run.cjs tests/browser/fixture-server.cjs tests/browser/extension.test.cjs; do
+  node --check "$REPO_ROOT/$script" || fail "Syntax error in $script"
+done
+for doc in PRIVACY.md CHANGELOG.md CONTRIBUTING.md SUPPORT.md SECURITY.md docs/store/listing.md docs/store/privacy-practices.md docs/store/release-checklist.md; do
+  [[ -f "$REPO_ROOT/$doc" ]] || fail "Missing release document: $doc"
+done
+# Canonical CI workflow is .github/workflows/ci.yml; until the repo's GitHub
+# App is granted `workflows` permission, the staged docs/ci/ci.yml is accepted
+# (see docs/ci/README.md).
+[[ -f "$REPO_ROOT/.github/workflows/ci.yml" || -f "$REPO_ROOT/docs/ci/ci.yml" ]] \
+  || fail "Missing CI workflow: .github/workflows/ci.yml (or staged docs/ci/ci.yml)"
+pass "Release tooling syntax and privacy/store/support documents pass verification"
 
 node -e '
 const fs = require("fs");
@@ -91,6 +104,9 @@ const root = process.argv[1];
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 if (manifest.manifest_version !== 3) throw new Error("Expected MV3");
 if (!fs.existsSync(path.join(root, manifest.action.default_popup))) throw new Error("Missing popup HTML");
+for (const reference of [...Object.values(manifest.icons || {}), ...Object.values(manifest.action.default_icon || {})]) {
+  if (!fs.existsSync(path.join(root, reference))) throw new Error("Missing icon: " + reference);
+}
 for (const cs of manifest.content_scripts) {
   for (const js of cs.js) {
     if (!fs.existsSync(path.join(root, js))) throw new Error("Missing content script: " + js);
