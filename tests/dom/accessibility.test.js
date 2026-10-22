@@ -44,10 +44,10 @@ test("tabs use roving tabindex and Arrow/Home/End keyboard navigation", async ()
     await popup.ready;
     const scroll = popup.document.querySelector("#scrollTab");
     const hiring = popup.document.querySelector("#hiringTab");
-    const settings = popup.document.querySelector("#settingsTab");
+    const settings = popup.document.querySelector("#settingsToggle");
+    assert.equal(popup.document.querySelectorAll("[role=tab]").length, 2);
     assert.equal(scroll.tabIndex, 0);
     assert.equal(hiring.tabIndex, -1);
-    assert.equal(settings.tabIndex, -1);
     scroll.focus();
     scroll.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     assert.equal(popup.document.activeElement, hiring);
@@ -55,15 +55,57 @@ test("tabs use roving tabindex and Arrow/Home/End keyboard navigation", async ()
     assert.equal(scroll.tabIndex, -1);
     assert.equal(hiring.tabIndex, 0);
     assert.equal(popup.document.querySelector("#hiringView").hidden, false);
+    assert.equal(settings.tabIndex, 0);
     hiring.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     assert.equal(popup.document.activeElement, scroll);
     scroll.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
-    assert.equal(popup.document.activeElement, settings);
-    assert.equal(popup.document.querySelector("#settingsView").hidden, false);
-    settings.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     assert.equal(popup.document.activeElement, hiring);
     hiring.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     assert.equal(popup.document.activeElement, scroll);
+  } finally {
+    popup.close();
+  }
+});
+
+test("the settings gear owns the settings panel instead of a third tab", async () => {
+  const popup = loadPopup();
+  try {
+    await popup.ready;
+    const gear = popup.document.querySelector("#settingsToggle");
+    const settingsView = popup.document.querySelector("#settingsView");
+    const hiring = popup.document.querySelector("#hiringTab");
+    assert.ok(gear, "gear button exists");
+    assert.equal(gear.getAttribute("aria-expanded"), "false");
+    assert.equal(gear.getAttribute("aria-controls"), "settingsView");
+    assert.match(gear.getAttribute("aria-label"), /settings/i);
+    assert.equal(settingsView.hidden, true);
+    assert.equal(settingsView.getAttribute("role"), "region");
+    assert.equal(settingsView.hasAttribute("role") && settingsView.getAttribute("role") === "tabpanel", false);
+
+    hiring.click();
+    assert.equal(popup.document.querySelector("#hiringView").hidden, false);
+    gear.click();
+    assert.equal(gear.getAttribute("aria-expanded"), "true");
+    assert.match(gear.getAttribute("aria-label"), /close/i);
+    assert.equal(settingsView.hidden, false);
+    assert.equal(popup.document.querySelector("#hiringView").hidden, true);
+    assert.equal(popup.document.querySelector("#scrollView").hidden, true);
+    assert.equal(gear.classList.contains("active"), true);
+    assert.equal(hiring.getAttribute("aria-selected"), "true");
+
+    gear.click();
+    assert.equal(gear.getAttribute("aria-expanded"), "false");
+    assert.equal(settingsView.hidden, true);
+    assert.equal(popup.document.querySelector("#hiringView").hidden, false, "closing returns to the previous tab");
+
+    gear.click();
+    settingsView.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(settingsView.hidden, true);
+    assert.equal(gear.getAttribute("aria-expanded"), "false");
+
+    gear.click();
+    popup.document.querySelector("#settingsDoneBtn").click();
+    assert.equal(settingsView.hidden, true);
   } finally {
     popup.close();
   }

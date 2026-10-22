@@ -318,7 +318,7 @@ p {
 /* ── Tabs ─────────────────────────────────────────────────── */
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -1183,6 +1183,59 @@ p {
   margin-top: 4px;
 }
 
+/* ── Settings gear — one corner control, not a third tab ───── */
+.settings-toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.2s ease;
+}
+
+.settings-toggle:hover {
+  color: var(--teal-dark);
+  border-color: #b8c8d3;
+  background: var(--paper);
+}
+
+.settings-toggle.active {
+  color: var(--surface);
+  border-color: var(--teal);
+  background: var(--teal);
+}
+
+.settings-toggle .settings-gear {
+  display: block;
+  transition: transform 0.25s ease;
+}
+
+.settings-toggle:hover .settings-gear,
+.settings-toggle.active .settings-gear {
+  transform: rotate(35deg);
+}
+
+.settings-view-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.settings-done {
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+
 /* ── Settings view — keeps main tabs light ──────────────────── */
 #settingsView.view.active {
   display: grid;
@@ -1293,6 +1346,11 @@ p {
 
   .connection-chip {
     margin-inline-start: 0;
+  }
+
+  /* The gear keeps the top-right corner even when the header wraps. */
+  .settings-toggle {
+    margin-inline-start: auto;
   }
 
   .target-actions,
