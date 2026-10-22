@@ -2,6 +2,12 @@
 
 All notable changes to Linkerter are documented here. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Popup UI rebuilt from scratch as a clean-light dashboard** (`popup.html`, `popup.css`): sticky app bar with brand mark and live connection chip, always-visible hero status card (state dot, state label, mode chip, step progress), pinned-feed target card, segmented Pause/Stop under a hero Start action, 2×2 tabular metric tiles, two-column results toolbar, collapsible `<details>` settings groups, and a sticky bottom navigation dock (Scroll / Hiring with live count badge / Settings). Visual language: airy white surfaces, hairline borders, single teal accent carried over from the extension mark. Behavior, element IDs, ARIA contracts, EN/FR/AR dictionaries, and RTL are unchanged; four new aria/label keys (`status.section`, `scroll.pauseStop`, `dock.section`, `settings.nav`) were added with full locale parity. Design record: `docs/superpowers/specs/2026-10-22-popup-dashboard-redesign-design.md`.
+
 ## [2.0.0] - 2026-10-22
 
 ### Added
