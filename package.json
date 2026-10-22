@@ -9,7 +9,8 @@
     "test:classifier": "node scripts/evaluate-classifier.js",
     "test:browser": "bash scripts/test-browser.sh",
     "probe:classifier": "node scripts/probe-classifier.js",
-    "probe:feed": "node scripts/probe-feed-roots.js"
+    "probe:feed": "node scripts/probe-feed-roots.js",
+    "preview:popup": "node scripts/preview-popup.cjs"
   },
   "engines": {
     "node": ">=22"
