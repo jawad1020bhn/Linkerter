@@ -18,6 +18,12 @@
         <h1 data-i18n="app.name">Feed Assistant</h1>
       </div>
       <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">CHECKING</span>
+      <button id="settingsToggle" class="settings-toggle" type="button" aria-expanded="false" aria-controls="settingsView" data-i18n-aria-label="settings.open" data-i18n-title="settings.open" aria-label="Open settings" title="Open settings">
+        <svg class="settings-gear" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.15"></circle>
+          <path d="M12 2.6a1.5 1.5 0 0 0-1.47 1.2l-.19.93a1.5 1.5 0 0 1-2.1 1.05l-.86-.4a1.5 1.5 0 0 0-1.83.42l-.66.83a1.5 1.5 0 0 0 .19 1.99l.7.62a1.5 1.5 0 0 1 0 2.28l-.7.62a1.5 1.5 0 0 0-.19 1.99l.66.83a1.5 1.5 0 0 0 1.83.42l.86-.4a1.5 1.5 0 0 1 2.1 1.05l.19.93a1.5 1.5 0 0 0 1.47 1.2h1.06a1.5 1.5 0 0 0 1.47-1.2l.19-.93a1.5 1.5 0 0 1 2.1-1.05l.86.4a1.5 1.5 0 0 0 1.83-.42l.66-.83a1.5 1.5 0 0 0-.19-1.99l-.7-.62a1.5 1.5 0 0 1 0-2.28l.7-.62a1.5 1.5 0 0 0 .19-1.99l-.66-.83a1.5 1.5 0 0 0-1.83-.42l-.86.4a1.5 1.5 0 0 1-2.1-1.05l-.19-.93A1.5 1.5 0 0 0 13.06 2.6Z"></path>
+        </svg>
+      </button>
     </header>
 
     <section id="onboarding" class="onboarding" aria-labelledby="onboardingTitle">
@@ -42,7 +48,6 @@
     <nav class="tabs" role="tablist" aria-label="Extension sections" data-i18n-aria-label="tabs.section">
       <button id="scrollTab" class="tab active" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="scrollView" data-i18n="tabs.scroll">Scroll</button>
       <button id="hiringTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="hiringView"><span data-i18n="tabs.hiring">Hiring filter</span> <span id="tabMatchCount" class="tab-count">0</span></button>
-      <button id="settingsTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="settingsView" data-i18n="tabs.settings">Settings</button>
     </nav>
 
     <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed to begin.</p>
@@ -149,7 +154,15 @@
     </section>
 
     <!-- SETTINGS: all configuration moved here to clear main views -->
-    <section id="settingsView" class="view" role="tabpanel" aria-labelledby="settingsTab" hidden="">
+    <section id="settingsView" class="view settings-view" role="region" aria-labelledby="settingsViewTitle" hidden="">
+      <div class="settings-view-header">
+        <div>
+          <p class="section-kicker" data-i18n="settings.kicker">LOCAL PREFERENCES</p>
+          <h2 id="settingsViewTitle" data-i18n="settings.title">Settings</h2>
+        </div>
+        <button id="settingsDoneBtn" class="button button-secondary settings-done" type="button" data-i18n="settings.done">Done</button>
+      </div>
+
       <!-- General -->
       <section class="panel settings-section" aria-labelledby="settingsGeneralTitle">
         <div class="settings-section-header">

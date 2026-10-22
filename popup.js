@@ -45,7 +45,8 @@ const $ = (selector) => document.querySelector(selector);
 const elements = {
   scrollTab: $("#scrollTab"),
   hiringTab: $("#hiringTab"),
-  settingsTab: $("#settingsTab"),
+  settingsToggle: $("#settingsToggle"),
+  settingsDoneBtn: $("#settingsDoneBtn"),
   scrollView: $("#scrollView"),
   hiringView: $("#hiringView"),
   settingsView: $("#settingsView"),
@@ -1041,36 +1042,60 @@ async function downloadLocalDiagnostic() {
   }
 }
 
+let lastTabView = "scroll";
+let settingsOpen = false;
+
+function syncSettingsToggle() {
+  const key = settingsOpen ? "settings.close" : "settings.open";
+  elements.settingsToggle.setAttribute("data-i18n-aria-label", key);
+  elements.settingsToggle.setAttribute("data-i18n-title", key);
+  elements.settingsToggle.setAttribute("aria-label", t(key));
+  elements.settingsToggle.setAttribute("title", t(key));
+}
+
+/**
+ * Source of truth for the visible panel. "scroll" and "hiring" are the two tabs;
+ * "settings" replaces both panels and is opened from the header gear, so the
+ * tablist keeps its selected tab while nothing in it looks active.
+ */
 function switchView(name, focus = false) {
-  const valid = ["scroll", "hiring", "settings"];
-  const target = valid.includes(name) ? name : "scroll";
-  const tabs = {
-    scroll: elements.scrollTab,
-    hiring: elements.hiringTab,
-    settings: elements.settingsTab
-  };
-  const views = {
-    scroll: elements.scrollView,
-    hiring: elements.hiringView,
-    settings: elements.settingsView
-  };
-  for (const key of valid) {
-    const isActive = key === target;
-    tabs[key].classList.toggle("active", isActive);
-    tabs[key].setAttribute("aria-selected", String(isActive));
-    tabs[key].tabIndex = isActive ? 0 : -1;
-    views[key].classList.toggle("active", isActive);
-    views[key].hidden = !isActive;
+  const wantsSettings = name === "settings";
+  if (!wantsSettings) lastTabView = name === "hiring" ? "hiring" : "scroll";
+  settingsOpen = wantsSettings;
+
+  const tabs = { scroll: elements.scrollTab, hiring: elements.hiringTab };
+  const views = { scroll: elements.scrollView, hiring: elements.hiringView };
+  for (const key of ["scroll", "hiring"]) {
+    const selected = key === lastTabView;
+    const visible = selected && !settingsOpen;
+    tabs[key].classList.toggle("active", visible);
+    tabs[key].setAttribute("aria-selected", String(selected));
+    tabs[key].tabIndex = selected ? 0 : -1;
+    views[key].classList.toggle("active", visible);
+    views[key].hidden = !visible;
   }
-  if (focus) tabs[target].focus();
-  if (target === "hiring") void refreshAll();
+
+  elements.settingsView.classList.toggle("active", settingsOpen);
+  elements.settingsView.hidden = !settingsOpen;
+  elements.settingsToggle.classList.toggle("active", settingsOpen);
+  elements.settingsToggle.setAttribute("aria-expanded", String(settingsOpen));
+  syncSettingsToggle();
+
+  if (focus) (settingsOpen ? elements.settingsToggle : tabs[lastTabView]).focus();
+  if (!settingsOpen && lastTabView === "hiring") void refreshAll();
+}
+
+function toggleSettings(force) {
+  const open = typeof force === "boolean" ? force : !settingsOpen;
+  if (open === settingsOpen) return;
+  switchView(open ? "settings" : lastTabView, true);
 }
 
 function handleTabKeydown(event) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
-  const tabs = [elements.scrollTab, elements.hiringTab, elements.settingsTab];
-  const names = ["scroll", "hiring", "settings"];
+  const tabs = [elements.scrollTab, elements.hiringTab];
+  const names = ["scroll", "hiring"];
   const current = tabs.indexOf(document.activeElement);
   let index = current < 0 ? 0 : current;
   if (event.key === "Home") index = 0;
@@ -1172,12 +1197,22 @@ async function initialize() {
   });
   elements.scrollTab.addEventListener("click", () => switchView("scroll"));
   elements.hiringTab.addEventListener("click", () => switchView("hiring"));
-  elements.settingsTab.addEventListener("click", () => switchView("settings"));
+  elements.settingsToggle.addEventListener("click", () => toggleSettings());
+  elements.settingsDoneBtn.addEventListener("click", () => toggleSettings(false));
+  elements.settingsView.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      toggleSettings(false);
+    }
+  });
   elements.scrollTab.addEventListener("keydown", handleTabKeydown);
   elements.hiringTab.addEventListener("keydown", handleTabKeydown);
-  elements.settingsTab.addEventListener("keydown", handleTabKeydown);
   document.querySelectorAll("[data-view-jump]").forEach((btn) => {
-    btn.addEventListener("click", () => switchView(btn.getAttribute("data-view-jump") || "settings", true));
+    btn.addEventListener("click", () => {
+      const target = btn.getAttribute("data-view-jump");
+      if (target === "settings") toggleSettings(true);
+      else switchView(target || "scroll", true);
+    });
   });
   elements.useActiveFeedBtn.addEventListener("click", () => {
     void (async () => {
