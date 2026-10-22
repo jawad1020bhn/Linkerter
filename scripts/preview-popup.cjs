@@ -4,7 +4,8 @@
  * Chrome caps extension popups at 800x600 CSS pixels, which is hard to judge from source.
  * This serves popup.html inside an 800x600 frame with a browser-side chrome.* stub
  * (scripts/preview-stub.js) and synthetic records, plus a side-by-side link that renders
- * the popup with the stylesheet from BEFORE_REF for comparison.
+ * the popup with the HTML and stylesheet from BEFORE_REF for comparison
+ * (both are swapped together, so whole-surface rebuilds compare correctly).
  *
  *   npm run preview:popup          -> http://localhost:4173
  *   PREVIEW_REF=main npm run preview:popup
@@ -43,17 +44,32 @@ function send(res, status, body, type = "text/plain; charset=utf-8") {
   res.end(payload);
 }
 
-function beforeStylesheet() {
+function refFile(name) {
   try {
-    return execFileSync("git", ["show", `${BEFORE_REF}:popup.css`], { cwd: ROOT, encoding: "utf8" });
+    return execFileSync("git", ["show", `${BEFORE_REF}:${name}`], { cwd: ROOT, encoding: "utf8" });
   } catch (_error) {
-    return `/* popup.css was not available at ${BEFORE_REF}. Pass PREVIEW_REF=<commit> to compare. */\n`;
+    return null;
   }
 }
 
+// Resolved once at startup: the before view swaps HTML and CSS together, so a
+// whole-surface rebuild (new markup + new stylesheet) still renders correctly.
+// The popup scripts are served from disk in both views.
+const BEFORE_HTML = refFile("popup.html");
+const BEFORE_CSS = refFile("popup.css");
+const HAS_BEFORE = BEFORE_HTML !== null && BEFORE_CSS !== null;
+
+function beforeStylesheet() {
+  return BEFORE_CSS !== null
+    ? BEFORE_CSS
+    : `/* popup.css was not available at ${BEFORE_REF}. Pass PREVIEW_REF=<commit> to compare. */\n`;
+}
+
 /** popup.html plus the preview stub, loaded before the popup's own scripts. */
-function popupPage(useBeforeStylesheet) {
-  const html = fs.readFileSync(path.join(ROOT, "popup.html"), "utf8");
+function popupPage(useBeforeView) {
+  const html = useBeforeView && BEFORE_HTML !== null
+    ? BEFORE_HTML
+    : fs.readFileSync(path.join(ROOT, "popup.html"), "utf8");
   // No `window.module` shim here on purpose: without it background.js takes its extension
   // branch and registers the real history coordinator on the stub's runtime.onMessage, so
   // HISTORY_GET / LOCAL_DATA_CLEAR / GET_DIAGNOSTICS behave as they do in the packaged build.
@@ -65,7 +81,7 @@ function popupPage(useBeforeStylesheet) {
   const withStub = html.includes("</head>")
     ? html.replace("</head>", `  ${injection}\n</head>`)
     : `${injection}\n${html}`;
-  return useBeforeStylesheet
+  return useBeforeView && BEFORE_CSS !== null
     ? withStub.replace('href="popup.css"', 'href="/popup.before.css"')
     : withStub;
 }
@@ -109,8 +125,9 @@ function harnessPage(hasBefore) {
   <div class="shell">
     <iframe name="popupFrame" src="/popup.html" title="Linkerter popup preview"></iframe>
   </div>
-  <p class="caption">Switch tabs (Scroll feed / Detected hiring) and resize your browser window: below
-    720px the layout falls back to a single column. Reload after editing <code>popup.css</code>.</p>
+  <p class="caption">Switch tabs (Scroll / Hiring filter / Settings) inside the popup. Reload after
+    editing <code>popup.html</code> or <code>popup.css</code>; the before view reads
+    <code>PREVIEW_REF</code> from git and swaps markup and stylesheet together.</p>
 </body>
 </html>
 `;
@@ -134,7 +151,7 @@ const server = http.createServer((req, res) => {
     return send(res, 400, "Bad request");
   }
 
-  if (urlPath === "/") return send(res, 200, harnessPage(Boolean(search.get("nobefore") !== "1")), TYPES[".html"]);
+  if (urlPath === "/") return send(res, 200, harnessPage(HAS_BEFORE && search.get("nobefore") !== "1"), TYPES[".html"]);
   if (urlPath === "/popup.html") return send(res, 200, popupPage(search.get("before") === "1"), TYPES[".html"]);
   if (urlPath === "/popup.before.css") return send(res, 200, beforeStylesheet(), TYPES[".css"]);
   if (urlPath === "/preview/stub.js") {
@@ -150,5 +167,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, HOST, () => {
   const shown = HOST === "0.0.0.0" ? "localhost" : HOST;
   process.stdout.write(`Linkerter popup preview on http://${shown}:${PORT}\n`);
-  process.stdout.write(`Comparing against popup.css at ${BEFORE_REF} (override with PREVIEW_REF).\n`);
+  process.stdout.write(HAS_BEFORE
+    ? `Comparing against popup.html + popup.css at ${BEFORE_REF} (override with PREVIEW_REF).\n`
+    : `Before view unavailable at ${BEFORE_REF}; pass PREVIEW_REF=<commit> to compare (pill hidden).\n`);
 });
