@@ -45,8 +45,10 @@ const $ = (selector) => document.querySelector(selector);
 const elements = {
   scrollTab: $("#scrollTab"),
   hiringTab: $("#hiringTab"),
+  settingsTab: $("#settingsTab"),
   scrollView: $("#scrollView"),
   hiringView: $("#hiringView"),
+  settingsView: $("#settingsView"),
   connectionChip: $("#connectionChip"),
   localeSelect: $("#localeSelect"),
   onboarding: $("#onboarding"),
@@ -1040,32 +1042,42 @@ async function downloadLocalDiagnostic() {
 }
 
 function switchView(name, focus = false) {
-  const hiring = name === "hiring";
-  elements.scrollTab.classList.toggle("active", !hiring);
-  elements.hiringTab.classList.toggle("active", hiring);
-  elements.scrollTab.setAttribute("aria-selected", String(!hiring));
-  elements.hiringTab.setAttribute("aria-selected", String(hiring));
-  elements.scrollTab.tabIndex = hiring ? -1 : 0;
-  elements.hiringTab.tabIndex = hiring ? 0 : -1;
-  elements.scrollView.classList.toggle("active", !hiring);
-  elements.hiringView.classList.toggle("active", hiring);
-  elements.scrollView.hidden = hiring;
-  elements.hiringView.hidden = !hiring;
-  if (focus) (hiring ? elements.hiringTab : elements.scrollTab).focus();
-  if (hiring) void refreshAll();
+  const valid = ["scroll", "hiring", "settings"];
+  const target = valid.includes(name) ? name : "scroll";
+  const tabs = {
+    scroll: elements.scrollTab,
+    hiring: elements.hiringTab,
+    settings: elements.settingsTab
+  };
+  const views = {
+    scroll: elements.scrollView,
+    hiring: elements.hiringView,
+    settings: elements.settingsView
+  };
+  for (const key of valid) {
+    const isActive = key === target;
+    tabs[key].classList.toggle("active", isActive);
+    tabs[key].setAttribute("aria-selected", String(isActive));
+    tabs[key].tabIndex = isActive ? 0 : -1;
+    views[key].classList.toggle("active", isActive);
+    views[key].hidden = !isActive;
+  }
+  if (focus) tabs[target].focus();
+  if (target === "hiring") void refreshAll();
 }
 
 function handleTabKeydown(event) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
-  const tabs = [elements.scrollTab, elements.hiringTab];
+  const tabs = [elements.scrollTab, elements.hiringTab, elements.settingsTab];
+  const names = ["scroll", "hiring", "settings"];
   const current = tabs.indexOf(document.activeElement);
   let index = current < 0 ? 0 : current;
   if (event.key === "Home") index = 0;
   else if (event.key === "End") index = tabs.length - 1;
   else if (event.key === "ArrowRight") index = (index + 1) % tabs.length;
   else index = (index - 1 + tabs.length) % tabs.length;
-  switchView(index === 1 ? "hiring" : "scroll", true);
+  switchView(names[index], true);
 }
 
 async function initialize() {
@@ -1160,8 +1172,13 @@ async function initialize() {
   });
   elements.scrollTab.addEventListener("click", () => switchView("scroll"));
   elements.hiringTab.addEventListener("click", () => switchView("hiring"));
+  elements.settingsTab.addEventListener("click", () => switchView("settings"));
   elements.scrollTab.addEventListener("keydown", handleTabKeydown);
   elements.hiringTab.addEventListener("keydown", handleTabKeydown);
+  elements.settingsTab.addEventListener("keydown", handleTabKeydown);
+  document.querySelectorAll("[data-view-jump]").forEach((btn) => {
+    btn.addEventListener("click", () => switchView(btn.getAttribute("data-view-jump") || "settings", true));
+  });
   elements.useActiveFeedBtn.addEventListener("click", () => {
     void (async () => {
       if (await chooseActiveFeedTab()) await refreshAll();

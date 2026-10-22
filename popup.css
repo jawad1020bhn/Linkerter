@@ -318,7 +318,7 @@ p {
 /* ── Tabs ─────────────────────────────────────────────────── */
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -1181,6 +1181,83 @@ p {
   padding: 14px 0 4px;
   border-top: 1px solid var(--line-soft);
   margin-top: 4px;
+}
+
+/* ── Settings view — keeps main tabs light ──────────────────── */
+#settingsView.view.active {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-section-header {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.settings-section-header h2 {
+  font-size: 16px;
+}
+
+.settings-section.compact-heading h2,
+.settings-section-header h2 {
+  letter-spacing: -0.01em;
+}
+
+.settings-danger {
+  border-color: #efd8d9;
+  background: #fffbfb;
+}
+
+.settings-danger .settings-section-header {
+  border-bottom-color: #efd8d9;
+}
+
+/* Hint on cleared main views */
+.view-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  background: #fbfcfd;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  flex-wrap: wrap;
+}
+
+.view-hint-icon {
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+.link-button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--teal-dark);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  margin-inline-start: auto;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.link-button:hover {
+  background: var(--paper);
+  border-color: #b8c8d3;
 }
 
 /* ── RTL support ──────────────────────────────────────────── */
