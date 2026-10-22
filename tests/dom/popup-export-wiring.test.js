@@ -10,11 +10,13 @@ const complete = {
   evidence: ["Hiring phrase"], signals: { activeOpening: true },
   fullText: "Complete historical text", contentComplete: true, extractionStatus: "complete",
   firstSeenAt: now(), lastSeenAt: now(),
+  author: { name: "Employer", profileUrl: "https://www.linkedin.com/company/acme/" },
+  permalink: "https://www.linkedin.com/posts/acme_activity-1",
   extracted: { emails: ["jobs@example.com"], jobTitles: ["Engineer"], hashtags: [], links: [] },
   metrics: { reactions: 2, comments: 1, reposts: null, views: null }
 };
 
-test("popup exports coordinator records and current posts with selected schema-v2 fields", async () => {
+test("popup exports coordinator records and current posts with selected schema-v3 fields", async () => {
   const partial = {
     ...complete, fullText: "Complete", contentComplete: false, extractionStatus: "partial",
     category: "open_role", lastSeenAt: now(), metrics: { reactions: 9 }
@@ -39,14 +41,19 @@ test("popup exports coordinator records and current posts with selected schema-v
     popup.document.querySelector("#exportBtn").click();
     await popup.waitFor(() => popup.downloads[0]?.clicked);
     const payload = JSON.parse(await popup.downloads[0].blob.text());
-    assert.equal(payload.schemaVersion, "2.0");
+    assert.equal(payload.schemaVersion, "3.0");
     assert.equal(payload.selectedCategory, "open_role");
     assert.equal(payload.posts.length, 1);
     assert.equal(payload.posts[0].fullText, "Complete historical text");
-    assert.equal(payload.posts[0].contentComplete, true);
     assert.deepEqual(payload.posts[0].extracted.emails, ["jobs@example.com"]);
-    assert.equal(payload.posts[0].reviewLabel, "useful");
-    assert.equal(payload.posts[0].metrics.reactions, 9);
+    // Export schema 3: the permalink is always present, internal bookkeeping is not exported.
+    assert.ok(payload.posts[0].permalink, "an exported post must be openable");
+    for (const dropped of ["sourcePostId", "reviewLabel", "firstSeenAt", "lastSeenAt", "historyStore",
+      "historyStores", "contentComplete", "extractionStatus", "metrics", "metricsCapturedAt"]) {
+      assert.ok(!(dropped in payload.posts[0]), `${dropped} must not be exported`);
+    }
+    assert.deepEqual(Object.keys(payload.posts[0].signals).sort(), ["email", "jobLink"]);
+    assert.deepEqual(Object.keys(payload.posts[0].postAge).sort(), ["label", "publishedAt"]);
     assert.equal(payload.monitorRun.id, "run-test");
   } finally {
     popup.close();
@@ -87,7 +94,7 @@ test("popup diagnostic download includes sanitized versions, selector health, co
     popup.document.querySelector("#diagnosticBtn").click();
     await popup.waitFor(() => popup.downloads[0]?.clicked);
     const diagnostic = JSON.parse(await popup.downloads[0].blob.text());
-    assert.equal(diagnostic.schemaVersion, "2.0");
+    assert.equal(diagnostic.schemaVersion, "3.0");
     assert.equal(diagnostic.messageSchemaVersion, "2.0");
     assert.equal(diagnostic.extensionVersion, "2.0.0");
     assert.equal(diagnostic.browserVersion, "130.0.1.2");

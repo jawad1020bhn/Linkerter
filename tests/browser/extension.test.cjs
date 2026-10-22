@@ -173,7 +173,7 @@ async function testPopupKeyboardAndDownload(context) {
       return names.length ? path.join(context.downloadsDir, names[0]) : false;
     }, { label: "actual JSON download" });
     const payload = JSON.parse(await fs.readFile(file, "utf8"));
-    assert.equal(payload.schemaVersion, "2.0");
+    assert.equal(payload.schemaVersion, "3.0");
     assert.ok(payload.posts.length >= 2);
     assert.ok(payload.posts.every((post) => post.fullText === undefined && post.emails === undefined));
 

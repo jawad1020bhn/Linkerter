@@ -24,6 +24,8 @@ All notable changes to Linkerter are documented here. Versions follow [Semantic 
 
 - An executable fixture-sanitization policy (`tests/unit/fixture-sanitization.test.js`, 4 tests): fixtures derived from a real export must use placeholder profile and company slugs, reserved `.example` mailboxes and hosts, synthetic job ids, and must carry no member tracking parameter, LinkedIn safety redirect or phone number — and no fixture at all may carry a profile URL ending in a real numeric or hex member id. `tests/fixtures/README.md` documents the policy and lists the real-derived fixtures.
 
+- **Export schema 3.0** — the downloaded JSON/CSV now carries only what a reviewer reads: `id`, `permalink` (always present), `category`, `confidence`, `score`, `evidence`, `signals.email`, `signals.jobLink`, `author`, `extracted` (emails, job titles, hashtags, links), `postAge.label`/`postAge.publishedAt`, and `fullText`. Removed from the file: `sourcePostId`, `reviewLabel`, `firstSeenAt`, `lastSeenAt`, `metricsCapturedAt`, `historyStore`, `historyStores`, `contentComplete`, `extractionStatus`, `metrics` (reactions/comments/reposts/views), `postAge.ageSecondsApprox`, `postAge.ageDaysApprox`, and 12 of the 14 `signals` flags. The **Age and metrics** export toggle became **Post age** and now localizes in all three locales, and a stored `includeMetrics: false` is still honoured. Nothing was removed from the records the extension keeps — deduplication, retention, history merging, ordering and the result rows use the full internal shape. Field reference: `docs/export-schema.md`.
+
 ### Changed
 
 - Consolidated adaptive scrolling into three modes while retaining Super Fast’s 15-minute/120-step caps and locked pause-on-input.

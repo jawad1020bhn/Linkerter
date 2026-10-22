@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SCHEMA_VERSION = "2.0";
+  const SCHEMA_VERSION = "3.0";
   const MESSAGE_SCHEMA_VERSION = "2.0";
   const CATEGORIES = ["open_role", "recruiter_search", "possible", "job_seeker", "hiring_discussion", "closed", "partial"];
   const FILTERS = ["all", ...CATEGORIES];
@@ -41,7 +41,7 @@
     includeFullText: false,
     includeEmails: false,
     includeJobTitles: true,
-    includeMetrics: true,
+    includePostAge: true,
     includePostMetadata: true,
     keepHistory: false,
     historyMode: "off",
@@ -99,7 +99,10 @@
       includeFullText: source.includeFullText === true,
       includeEmails: source.includeEmails === true,
       includeJobTitles: source.includeJobTitles !== false,
-      includeMetrics: source.includeMetrics !== false,
+      // Export schema 3 dropped engagement metrics; the toggle now governs the post-age
+      // fields. The legacy `includeMetrics` preference is still honoured so a stored choice
+      // from schema 2 is not silently reversed.
+      includePostAge: (source.includePostAge ?? source.includeMetrics) !== false,
       includePostMetadata: source.includePostMetadata !== false,
       keepHistory: requestedMode === "persistent",
       historyMode: requestedMode,
