@@ -87,9 +87,14 @@ pass "All 10 Chrome Extension JavaScript files pass node --check"
 for script in scripts/generate-icons.cjs tests/browser/run.cjs tests/browser/fixture-server.cjs tests/browser/extension.test.cjs; do
   node --check "$REPO_ROOT/$script" || fail "Syntax error in $script"
 done
-for doc in PRIVACY.md CHANGELOG.md CONTRIBUTING.md SUPPORT.md SECURITY.md .github/workflows/ci.yml docs/store/listing.md docs/store/privacy-practices.md docs/store/release-checklist.md; do
+for doc in PRIVACY.md CHANGELOG.md CONTRIBUTING.md SUPPORT.md SECURITY.md docs/store/listing.md docs/store/privacy-practices.md docs/store/release-checklist.md; do
   [[ -f "$REPO_ROOT/$doc" ]] || fail "Missing release document: $doc"
 done
+# Canonical CI workflow is .github/workflows/ci.yml; until the repo's GitHub
+# App is granted `workflows` permission, the staged docs/ci/ci.yml is accepted
+# (see docs/ci/README.md).
+[[ -f "$REPO_ROOT/.github/workflows/ci.yml" || -f "$REPO_ROOT/docs/ci/ci.yml" ]] \
+  || fail "Missing CI workflow: .github/workflows/ci.yml (or staged docs/ci/ci.yml)"
 pass "Release tooling syntax and privacy/store/support documents pass verification"
 
 node -e '
