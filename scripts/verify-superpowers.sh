@@ -8,6 +8,10 @@ CANONICAL_SKILLS="$REPO_ROOT/.agents/superpowers/skills"
 AGENTS_SKILLS="$REPO_ROOT/.agents/skills"
 CLAUDE_SKILLS="$REPO_ROOT/.claude/skills"
 
+# Documented third-party skills installed alongside superpowers (see CHANGELOG).
+# They are excluded from the byte-for-byte canonical comparison but must exist.
+EXTRA_SKILLS=(impeccable)
+
 if [[ "${1:-}" == "--sync" ]]; then
   rm -rf "$AGENTS_SKILLS" "$CLAUDE_SKILLS"
   cp -a "$CANONICAL_SKILLS" "$AGENTS_SKILLS"
@@ -50,11 +54,17 @@ for skill in "${EXPECTED_SKILLS[@]}"; do
 done
 pass "All ${#EXPECTED_SKILLS[@]} core skills present in .agents/superpowers/skills/"
 
-diff -rq "$CANONICAL_SKILLS" "$AGENTS_SKILLS" >/dev/null || fail ".agents/skills differs from canonical skills (run with --sync)"
-pass ".agents/skills matches canonical skills byte-for-byte"
+diff_args=()
+for extra in "${EXTRA_SKILLS[@]}"; do diff_args+=("--exclude=$extra"); done
+for extra in "${EXTRA_SKILLS[@]}"; do
+  [[ -f "$AGENTS_SKILLS/$extra/SKILL.md" ]] || fail "Declared extra skill missing from .agents/skills: $extra"
+  [[ -f "$CLAUDE_SKILLS/$extra/SKILL.md" ]] || fail "Declared extra skill missing from .claude/skills: $extra"
+done
+diff -rq "${diff_args[@]}" "$CANONICAL_SKILLS" "$AGENTS_SKILLS" >/dev/null || fail ".agents/skills differs from canonical skills (run with --sync)"
+pass ".agents/skills matches canonical skills byte-for-byte (plus declared extras: ${EXTRA_SKILLS[*]})"
 
-diff -rq "$CANONICAL_SKILLS" "$CLAUDE_SKILLS" >/dev/null || fail ".claude/skills differs from canonical skills (run with --sync)"
-pass ".claude/skills matches canonical skills byte-for-byte"
+diff -rq "${diff_args[@]}" "$CANONICAL_SKILLS" "$CLAUDE_SKILLS" >/dev/null || fail ".claude/skills differs from canonical skills (run with --sync)"
+pass ".claude/skills matches canonical skills byte-for-byte (plus declared extras: ${EXTRA_SKILLS[*]})"
 
 for f in AGENTS.md CLAUDE.md GEMINI.md opencode.json .gitignore .gitattributes docs/superpowers/README.md; do
   [[ -f "$REPO_ROOT/$f" ]] || fail "Missing root config/doc file: $f"

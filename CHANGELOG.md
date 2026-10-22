@@ -4,6 +4,10 @@ All notable changes to Linkerter are documented here. Versions follow [Semantic 
 
 ## [Unreleased]
 
+### Added
+
+- **Impeccable skill installed** (v4.7.0, engine 0.1.16, Apache-2.0, from `pbakaus/impeccable`) into `.agents/skills/impeccable/` and `.claude/skills/impeccable/` with LICENSE/NOTICE attribution, and registered in the AGENTS.md skills index. It covers frontend UI design, critique, audit, and polish (24 commands via `/impeccable <verb>`); the launcher fetches its pinned engine binary once on first run outside the sandbox, and SKILL.md's documented fallback applies when the launcher is unavailable.
+
 ### Fixed
 
 - `npm run dev:auto-update` now watches **the checkout's current branch** by default (falling back to the remote's default branch only when HEAD is detached). Previously the default was the remote's default branch, so on any feature/session-branch checkout the documented quickstart paused forever on `update paused: … branch-mismatch` and never pulled that branch's own commits — auto-update effectively did nothing outside `main`. Explicit `--branch` still pins the target, the guard still refuses to pull one branch into a checkout of another branch (e.g. after switching branches mid-watch), and the startup line now reports the branch actually being watched.

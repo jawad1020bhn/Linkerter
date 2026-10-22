@@ -21,6 +21,7 @@ Check this table BEFORE every response or action:
 | Skill | When You MUST Invoke It | Path |
 |---|---|---|
 | `brainstorming` | **BEFORE any creative or feature work** — creating features, building UI/components, adding functionality, modifying behavior, or planning anything new | `.agents/skills/brainstorming/SKILL.md` |
+| `impeccable` | **BEFORE any frontend UI design work** — shaping, redesign, critique, audit, or polish of interfaces (popup, dashboard, components, forms, onboarding, empty states): UX review, hierarchy, layout, typography, color, motion, UX copy, accessibility, responsive behavior, design systems/tokens | `.agents/skills/impeccable/SKILL.md` |
 | `systematic-debugging` | **BEFORE proposing fixes** for any bug, regression, DOM selector breakage, test failure, or unexpected behavior | `.agents/skills/systematic-debugging/SKILL.md` |
 | `writing-plans` | **BEFORE touching code** once requirements/spec exist for a multi-step task (saves plan to `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`) | `.agents/skills/writing-plans/SKILL.md` |
 | `executing-plans` | When executing an implementation plan inline in the current session (default on **Arena.ai Agent Mode** or whenever no child subagent tool exists) | `.agents/skills/executing-plans/SKILL.md` |
