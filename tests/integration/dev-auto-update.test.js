@@ -172,6 +172,43 @@ test("a checkout on another branch is never fast-forwarded", async (t) => {
   assert.equal(fs.existsSync(path.join(dev, "dev-autoreload.json")), false);
 });
 
+test("without --branch the watcher follows the checked-out branch", async (t) => {
+  const { dev, author } = fixture(t);
+  git(author, "checkout", "-q", "-b", "feature");
+  git(author, "push", "-q", "origin", "feature");
+
+  git(dev, "fetch", "-q", "origin");
+  git(dev, "checkout", "-q", "-b", "feature", "origin/feature");
+
+  const second = commit(author, "file.txt", "one\ntwo\n", "feature work");
+  git(author, "push", "-q", "origin", "feature");
+
+  const { runOnce } = await loadModule();
+  const result = await runOnce({ repo: dev });
+
+  assert.equal(result.state, "updated");
+  assert.equal(result.branch, "feature");
+  assert.equal(result.commit, second);
+  assert.equal(git(dev, "rev-parse", "HEAD"), second);
+  assert.equal(readStamp(dev).commit, second);
+  assert.equal(readStamp(dev).branch, "feature");
+});
+
+test("a detached HEAD falls back to the remote default branch", async (t) => {
+  const { dev, author, first } = fixture(t);
+  const second = commit(author, "file.txt", "one\ntwo\n", "second");
+  git(author, "push", "-q", "origin", "main");
+
+  git(dev, "checkout", "-q", "--detach", first);
+
+  const { runOnce } = await loadModule();
+  const result = await runOnce({ repo: dev });
+
+  assert.equal(result.state, "updated");
+  assert.equal(result.branch, "main");
+  assert.equal(result.commit, second);
+});
+
 test("the stamp is written atomically and never leaves temporary files behind", async (t) => {
   const { dev } = fixture(t);
   const { writeStamp } = await loadModule();

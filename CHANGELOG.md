@@ -4,6 +4,10 @@ All notable changes to Linkerter are documented here. Versions follow [Semantic 
 
 ## [Unreleased]
 
+### Fixed
+
+- `npm run dev:auto-update` now watches **the checkout's current branch** by default (falling back to the remote's default branch only when HEAD is detached). Previously the default was the remote's default branch, so on any feature/session-branch checkout the documented quickstart paused forever on `update paused: … branch-mismatch` and never pulled that branch's own commits — auto-update effectively did nothing outside `main`. Explicit `--branch` still pins the target, the guard still refuses to pull one branch into a checkout of another branch (e.g. after switching branches mid-watch), and the startup line now reports the branch actually being watched.
+
 ### Changed
 
 - **Popup UI rebuilt from scratch as a clean-light dashboard** (`popup.html`, `popup.css`): sticky app bar with brand mark and live connection chip, always-visible hero status card (state dot, state label, mode chip, step progress), pinned-feed target card, segmented Pause/Stop under a hero Start action, 2×2 tabular metric tiles, two-column results toolbar, collapsible `<details>` settings groups, and a sticky bottom navigation dock (Scroll / Hiring with live count badge / Settings). Visual language: airy white surfaces, hairline borders, single teal accent carried over from the extension mark. Behavior, element IDs, ARIA contracts, EN/FR/AR dictionaries, and RTL are unchanged; four new aria/label keys (`status.section`, `scroll.pauseStop`, `dock.section`, `settings.nav`) were added with full locale parity. Design record: `docs/superpowers/specs/2026-10-22-popup-dashboard-redesign-design.md`.
