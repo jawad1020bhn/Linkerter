@@ -1,0 +1,730 @@
+[
+  {
+    "id": "rw-en-01",
+    "lang": "en",
+    "text": "post sponsorise personalize your search - filter jobs by location, experience level, benefits, and more. get started get started linkedin.com en savoir plus",
+    "category": "none",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-01/",
+      "https://www.linkedin.com/jobs/search/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Sponsored LinkedIn Jobs ad, not a post. The monitor must skip sponsored/promoted cards; the classifier guard is defence in depth for as long as the label survives in the text.",
+    "observed": {
+      "category": "possible",
+      "score": 3,
+      "evidence": [
+        "Employment term: jobs@114",
+        "Job/careers link"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-02",
+    "lang": "fr",
+    "text": "📢 offre d’emploi : ingenieur informatique (h/f)la societe SARL Alpha recrute un(e) ingenieur(e) informatique . 📍 lieu de travail : fornaka mostaganem 🏠 residence : mostaganem ou ses environs. profil recherche :diplome en informatique ou equivalent. experience professionnelle de 2 ans minimum dans le domaine. bonne maitrise de l’administration et de la gestion des bases de donnees. competences en reseaux informatiques et administration des serveurs. 📩 candidature : merci d’envoyer votre cv a l’adresse suivante: recrutement@entreprise-alpha.example objet du mail : ingenieur informatique. nous invitons les candidats interesses et correspondant au profil recherche a nous transmettre leurs candidatures.",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-a",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Offre d'emploi with profile, location and application email.",
+    "observed": {
+      "category": "open_role",
+      "score": 8,
+      "evidence": [
+        "Hiring phrase: offre d emploi@102",
+        "Hiring phrase: profil recherche@291",
+        "Hiring phrase: profil recherche@738",
+        "Recruiting term: ressources humaines@52",
+        "Employment term: emploi@110",
+        "Application cue: merci d envoyer votre cv@566",
+        "Email address",
+        "Email link"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-03",
+    "lang": "fr",
+    "text": "je me souviens avoir panique mon dernier jour en ecole d'ingenieur en mode \"mec tu vas faire quoi maintenant \" puis je suis tombe dans le piege de l'esn en cdi (comme a peu pres tous mes autres collegues de promo) j'ai signe chez une grande esn historique ou je me faisais fouetter pour 28k€ brut annuel. heureusement j'ai vite compris qu'il y avait un gros probleme. tous les jours je me repetais : \"ptn tu peux pas rester comme ca toute ta vie a faire du pl/sql pour meme pas 100€ par jour alors que tu es revendu 700€ au client, reagis mec !!!\" alors oui, j'ai la chance d'avoir un pere a son compte qui m'a toujours encourage a creer ma boite plutot que d'etre salarie. aux diners de famille il me trollait tout le temps en me repetant que la seule maniere de mieux gagner sa vie etait de se lancer a son propre compte. il me trollait aussi sur le fait que lui avait 0 etudes et faisait 10k€/mois en etant antiquaire ambulant sans diplome alors que moi je depassais pas les 2k€/mois avec mon diplome d'ingenieur bac+5. c'est lui qui m'a appris que des plombiers a leur compte gagnait parfo …",
+    "category": "none",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-02/",
+      "https://www.linkedin.com/in/auteur-03/",
+      "https://calendly.example/entretien/apport-affaires",
+      "https://www.linkedin.com/feed/",
+      "https://www.linkedin.com/in/auteur-04/"
+    ],
+    "note": "Freelance-vs-salaried life story. Reached possible on bare cdi/jobs/freelance.",
+    "observed": {
+      "category": "possible",
+      "score": 2,
+      "evidence": [
+        "Employment term: cdi@360",
+        "Employment term: jobs@1578",
+        "Employment term: freelance@1753",
+        "Employment term: jobs@2008"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-04",
+    "lang": "fr",
+    "text": "📢 offre d’emploi recrutement immediat 🏢 un etablissement public recrute : 🔹 1. chef de service des moyens generaux profil : diplome universitaire en gestion. experience : 5 ans minimum, avec une experience confirmee en gestion des moyens generaux. 🔹 2. coordonnateur des moyens generaux profil : technicien superieur/ bts. experience : 3 ans minimum dans la gestion des moyens generaux. 🔹 3. chauffeur – acheteur – demarcheur profil : niveau secondaire souhaitee. experience : 2 ans minimum en conduite. 📩 candidature : les candidats interesses sont invites a transmettre leur cv a l’adresse suivante : recrutement@entreprise-iota.example . 📍 lieu de travail : alger. ⏳ prise de fonction : immediate.",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-05/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Three named roles, profiles, experience, email, location.",
+    "observed": {
+      "category": "open_role",
+      "score": 8,
+      "evidence": [
+        "Hiring phrase: offre d emploi@41",
+        "Recruiting term: recrutement@56",
+        "Recruiting term: recrutement@638",
+        "Employment term: job@29",
+        "Employment term: emploi@49",
+        "Employment term: fonction@696",
+        "Email address",
+        "Email link"
+      ]
+    }
+  },
+  {
+    "id": "rw-ar-05",
+    "lang": "ar",
+    "text": "🔴 توظيــف Entreprise Beta p... 📍 الموقع: حاسي مسعود – الجنوب الجزايري 🔹 المنصب المطلوب: ✅ كهربايي صناعي موهل – electricien industriel 📌 الشروط: شهادة او موهل في الكهرباء الصناعية. خبرة مهنية في المجال الصناعي. التحكم في التركيبات الكهربايية الصناعية وقواعد السلامة. الجدية والانضباط والاستعداد للعمل في الجنوب. 🕒 نظام العمل: 4×4 (28 يوم عمل / 28 يوم راحة) 🏠 الاقامة والاطعام: متكفل بهما من طرف الشركة. 📩 البريد الالكتروني: Entreprise recrutement@entreprise-alpha.example 📌 عنوان البريد: candidature – electricien industriel",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-b",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Arabic vacancy: توظيف + المنصب المطلوب + email. Tatweel (U+0640) inside توظيــف; frame requires مطلوب … للعمل.",
+    "observed": {
+      "category": "possible",
+      "score": 3,
+      "evidence": [
+        "Employment term: عمل@533",
+        "Email address",
+        "Email link"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-07",
+    "lang": "fr",
+    "text": "🔴 opportunite d’emploi a alger – Entreprise Gamma recrute ! 🎓 jeunes diplome(e)s en ressources humaines, cette opportunite est pour vous ! vous venez de terminer vos etudes en rh et vous souhaitez enfin mettre un pied dans le monde professionnel  👀 🚀 Entreprise Gamma vous donne l’occasion de demarrer votre carriere, d’apprendre sur le terrain et de developper vos competences au sein de ses equipes. 📍 lieu de travail : kouba, alger 📩 pour postuler, envoyez votre cv a : cv@entreprise-gamma.example 🔄 vous connaissez un(e) jeune diplome(e) en rh a la recherche d’une premiere experience  identifiez-le/la en commentaire ou partagez cette annonce ! #recrutement #emploialger #ressourceshumaines #jeunediplome #premieremploi #entreprise #algerie",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-06/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23emploialger&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23ressourceshumaines&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23jeunedipl%C3%B4m%C3%A9&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23premieremploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23entreprise&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23algerie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "« IMS Maghreb SPA recrute ! » — third-person recrute is not a frame; only je/nous forms are.",
+    "observed": {
+      "category": "possible",
+      "score": 6,
+      "evidence": [
+        "Recruiting term: talent acquisition@43",
+        "Recruiting term: ressources humaines@221",
+        "Recruiting term: recrutement@752",
+        "Employment term: opportunite d emploi@144",
+        "Employment term: emploi@158",
+        "Application cue: envoyez votre cv@573",
+        "Email address",
+        "Email link",
+        "Hiring hashtag: #recrutement"
+      ]
+    }
+  },
+  {
+    "id": "rw-en-08",
+    "lang": "en",
+    "text": "📢 we are hiring – payroll specialist 📍 location: hassi messaoud, algeria 🏢 company: Entreprise Pi 🛢 industry: oil  gas Entreprise Pi is looking for a qualified and detail-oriented payroll specialist to join its team in hassi messaoud. 🔹 key responsibilities: process monthly payroll accurately and within established deadlines. verify attendance records, overtime, bonuses, allowances, and deductions. ensure compliance with algerian labor legislation, tax regulations, and social security requirements. prepare payroll reports and maintain accurate employee compensation records. handle payroll-related inquiries and resolve salary discrepancies. coordinate with hr and finance departments to ensure smooth payroll operations. maintain the confidentiality of employee payroll information. ensure proper payroll documentation and support internal audits when required. 🔹 requirements: bachelor's degree in accounting, finance, human resources, or a related field. previous experience in payroll processing and administration. good knowledge of algerian payroll regulations and social security …",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-07/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23Entreprise Pi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23hiring&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23payrollspecialist&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23payrolljobs&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23oilandgas&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23hassimessaoud&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23algeria&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recruitment&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "We are hiring – payroll specialist, responsibilities and requirements.",
+    "observed": {
+      "category": "open_role",
+      "score": 7,
+      "evidence": [
+        "Hiring phrase: we are hiring@52",
+        "Recruiting term: human resources@939",
+        "Recruiting term: recruitment@1478",
+        "Email address",
+        "Email link",
+        "Hiring hashtag: #hiring",
+        "Hiring hashtag: #recruitment"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-09",
+    "lang": "fr",
+    "text": "📢 precision concernant mes publications de recrutement recentes. je souhaite apporter une precision concernant les offres d'emploi que je partage sur mon profil linkedin. les postes publies concernent des opportunites professionnelles basees en algerie, avec une localisation clairement indiquee dans chaque annonce. les candidatures recherchees sont donc celles de personnes residant en algerie et disponibles pour occuper ces postes sur le territoire national. or, ces derniers jours, j'ai constate un phenomene assez surprenant : malgre la precision de la localisation dans mes publications, je recois un tres grand nombre de candidatures de personnes residant au maroc (400 cadidatures en 3 jours), tandis que les candidatures locales sont quasiment inexistantes. je m'interroge donc sur la diffusion de mes publications : s'agit-il d'un changement dans l'algorithme de linkedin, d'un ciblage geographique particulier ou d'un autre phenomene  si d'autres recruteurs Entreprise Nuntrent la meme situation, je serais interessee par leurs retours d'experience. merci pour vos temoignages et vos …",
+    "category": "hiring_discussion",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-08/",
+      "https://www.linkedin.com/in/auteur-09/",
+      "https://www.linkedin.com/feed/",
+      "https://www.linkedin.com/in/auteur-10/"
+    ],
+    "note": "Recruiter asking why her posts reach another country; mentions offres d'emploi/postes/candidatures but names no vacancy.",
+    "observed": {
+      "category": "open_role",
+      "score": 6,
+      "evidence": [
+        "Hiring phrase: offres d emploi@344",
+        "Recruiting term: talent acquisition@115",
+        "Recruiting term: recrutement@272",
+        "Employment term: emploi@353",
+        "Employment term: postes@404",
+        "Employment term: opportunites professionnelles@434",
+        "Employment term: postes@656"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-10",
+    "lang": "fr",
+    "text": "[ 📝 cdi interimaire ] 🎉 felicitations a Candidat L pour la signature de son cdi interimaire, accompagne par l’agence de cambrai ! 📝 ce contrat a un objectif simple : vous permettre de conserver les avantages d’un contrat d'#interim tout en accedant a ceux d’un contrat a duree indeterminee. vous profiterez ainsi d’un salaire garanti meme entre les missions, de conges payes, d’une diversite de missions proposees et de formations pour continuer a evoluer ⬆ 💼 comme lui, venez decouvrir nos offres d’emploi des maintenant : en telechargeant l’application 👉 https://agence-interim.example/jobs ou sur notre site internet 👉 https://agence-interim.example/app #recrutement #cdi #emploi #interimaire #emploi #cdii",
+    "category": "possible",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-11/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23int%C3%A9rim&origin=HASH_TAG_FROM_FEED",
+      "https://ow.example/offre-01",
+      "https://ow.example/offre-02",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23cdi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23emploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23int%C3%A9rimaire&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23cdii&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Congratulates a placement and invites browsing generic offers. No named role, so not an active vacancy.",
+    "observed": {
+      "category": "open_role",
+      "score": 7,
+      "evidence": [
+        "Hiring phrase: offres d emploi@512",
+        "Recruiting term: recrutement@656",
+        "Employment term: cdi@46",
+        "Employment term: cdi@109",
+        "Employment term: interim@252",
+        "Employment term: emploi@521",
+        "Employment term: cdi@669",
+        "Employment term: emploi@674",
+        "Employment term: emploi@695",
+        "Hiring hashtag: #recrutement",
+        "Hiring hashtag: #cdi",
+        "Hiring hashtag: #emploi"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-11",
+    "lang": "fr",
+    "text": "📢 recrutement – entreprise industrielle a batna une entreprise specialisee dans la fabrication ceramique recrute pour son site a batna : 1 assistante responsable management de la qualite (rmq) - diplome en qualite ou domaine equivalent. - experience de 1 a 2 ans. - maitrise obligatoire de la norme iso 9001:2015 et du francais. - residence a batna obligatoire. missions : suivi du smq, gestion documentaire, traitement des non-conformites, audits internes et amelioration continue. 2 ingenieur en maintenance electrique - diplome d’ingenieur ou master en genie electrique ou electrotechnique. - experience de 1 a 2 ans, idealement en milieu industriel. - connaissances en maintenance electrique, diagnostic des pannes et securite. missions : maintenance preventive et corrective, diagnostic des pannes, suivi des interventions et reduction des arrets de production. 3 controleur de gestion - bac+5 en finance, controle de gestion, comptabilite ou gestion. - debutant accepte. - maitrise d’excel et connaissances en analyse financiere, budgets et calcul des couts. missions : suivi budgetaire, tab …",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-b",
+      "https://www.linkedin.com/in/auteur-12/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "« une entreprise … recrute pour son site à Batna » — third-person recrute again.",
+    "observed": {
+      "category": "possible",
+      "score": 4,
+      "evidence": [
+        "Recruiting term: ressources humaines@104",
+        "Recruiting term: recrutement@145",
+        "Employment term: cdd@1347",
+        "Employment term: poste@1410",
+        "Email address",
+        "Email link"
+      ]
+    }
+  },
+  {
+    "id": "rw-en-12",
+    "lang": "en",
+    "text": "we're #hiring a new Entreprise Nu next gen - field engineer in pesaro and urbino, marche. apply today or share this post with your network. Entreprise Nu next gen - field engineer Entreprise Nu next gen - field engineer Entreprise Nu pesaro-et-urbino (sur site) 2 500 € par mois",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-13/",
+      "https://www.linkedin.com/company/entreprise-14/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23hiring&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/jobs/view/4400000001/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "LinkedIn job-share card: We're #hiring … apply today.",
+    "observed": {
+      "category": "open_role",
+      "score": 9,
+      "evidence": [
+        "Hiring phrase: offre d emploi@275",
+        "Hiring phrase: offre d emploi@370",
+        "Employment term: emploi@283",
+        "Employment term: emploi@378",
+        "Application cue: apply today@170",
+        "Job/careers link",
+        "Hiring hashtag: #hiring"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-13",
+    "lang": "fr",
+    "text": "offre d’emploi – charge(e) de facturation societe privee situee a kouba, alger, recrute un(e) charge(e) de facturation. profil recherche : * formation en comptabilite ou gestion. * bonne maitrise de la facturation. * maitrise de l’outil informatique. * serieux(se), organise(e) et rigoureux(se). * une experience dans un poste similaire est souhaitee. lieu de travail : kouba, alger. pour postuler : envoyez votre cv a l’adresse suivante : recrutement@entreprise-beta.example",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-07/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Offre d'emploi – chargé(e) de facturation, profile and email.",
+    "observed": {
+      "category": "open_role",
+      "score": 9,
+      "evidence": [
+        "Hiring phrase: offre d emploi@52",
+        "Hiring phrase: profil recherche@167",
+        "Employment term: emploi@60",
+        "Employment term: poste@355",
+        "Application cue: envoyez votre cv@433",
+        "Email address",
+        "Email link"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-14",
+    "lang": "fr",
+    "text": "bonjour a tous ! je recherche un nouveau poste et vous serais reconnaissant(e) de m‘apporter votre aide. si vous entendez parler d’une opportunite ou si vous souhaitez simplement en discuter, envoyez-moi un message ou laissez un commentaire ci-dessous. j‘aimerais reprendre contact. #opentowork a propos de moi et de ce que je recherche : 💼 je recherche des postes de administrateur, conseiller, administrateur d’investissements, finance et responsable financier. 🌎 je suis a l’ecoute de nouvelles opportunites : mahdia et sousse. ⭐ j’ai travaille chez taysir microfinance.",
+    "category": "job_seeker",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-15/",
+      "https://www.linkedin.com/in/auteur-16/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23opentowork&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "« Je recherche un nouveau poste … envoyez-moi un message ». Lexicon has je cherche un poste, not je recherche.",
+    "observed": {
+      "category": "possible",
+      "score": 2,
+      "evidence": [
+        "Employment term: poste@179",
+        "Employment term: postes@492",
+        "Contact cue: envoyez-moi un message@328"
+      ]
+    }
+  },
+  {
+    "id": "rw-ar-18",
+    "lang": "ar",
+    "text": "صاحب موسسة وظف متخرج جديد لمدة عام و نصف او عامين تقريبا كمفتش..... كان يخدم عدة انشطة .... جاتو فرصة عمل اخرى كاي شاب طموح دار استقالة و خدم المدة القانونية كي لحقت شهادة العمل سي خونا المووودير نحالو كل الانشطة لي تخصص فيها و خلالو نشاط واحد برك الاقل اهمية فيهم باش يفسد عليه التوظيف في الموسسات المنافسة.......... انا نقلك حاجة وحدة برك الدنيا هذي او نديو منها حفرة و كفن و الدود ياكلنا ...... و الرزق راه على ربي..... و شوف في روحك انت برك بدون مستوى و راك لحقت رجعت صاحب موسسة كيفاش تحرم ناس هذا وين بداو حياتهم المهنية .....",
+    "category": "hiring_discussion",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-17/",
+      "https://www.linkedin.com/in/auteur-18/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Arabic labour-relations story (resignation, work certificate, sabotage). Names no vacancy and no candidate search, so it belongs with employment commentary rather than in openings or the review bucket.",
+    "observed": {
+      "category": "possible",
+      "score": 2,
+      "evidence": [
+        "Intake phrase: فرصة عمل@233",
+        "Employment term: عمل@238"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-19",
+    "lang": "fr",
+    "text": "📢 offre d’emploi – 04 ingenieurs en electrotechnique la SARL Delta, leader dans le domaine des emballages flexibles et aseptiques, sise a setif, recrute 04 ingenieurs en electrotechnique. profil recherche :* diplome d’ingenieur en electrotechnique. *experience de plus de 2 ans dans un poste similaire. * aptitude au travail en equipe. * serieux, dynamisme et sens des responsabilites. 📍 lieu de travail : setif. 📩 candidature : les candidats interesses sont invites a envoyer leur cv a l’adresse suivante :✉ recrutement@entreprise-gamma.example",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-b",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Offre d'emploi – 04 ingénieurs en électrotechnique, Sétif, email.",
+    "observed": {
+      "category": "open_role",
+      "score": 7,
+      "evidence": [
+        "Hiring phrase: offre d emploi@195",
+        "Hiring phrase: profil recherche@392",
+        "Employment term: emploi@203",
+        "Employment term: poste@488",
+        "Email address",
+        "Email link"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-21",
+    "lang": "fr",
+    "text": "🤖 envie de transformer l’ia en solutions concretes et responsables  Groupe Xi recherche son/sa responsable ia france, un role strategique et a forte visibilite, rattache(e) au coo france.vous definirez la feuille de route ia pour Groupe Xi risk et Groupe Xi people amp; investments, developperez des solutions concretes, accelererez l’adoption des outils et accompagnerez les equipes dans la transformation de leurs metiers. vous aimez faire le lien entre technologie, enjeux business et conduite du changement  rejoignez-nous pour contribuer a une innovation utile, mesurable et responsable au sein de Groupe Xi france. 👉 postulez des maintenant !",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-15/",
+      "https://www.linkedin.com/in/auteur-19/",
+      "https://www.linkedin.com/company/entreprise-20/",
+      "https://www.linkedin.com/jobs/view/4400000002/",
+      "https://www.linkedin.com/feed/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23r%C3%A9seau"
+    ],
+    "note": "Responsable IA France, missions and application link, inside a comment wrapper.",
+    "observed": {
+      "category": "open_role",
+      "score": 11,
+      "evidence": [
+        "Hiring phrase: offre d emploi@993",
+        "Intake phrase: rejoignez-nous@687",
+        "Recruiting term: talent acquisition@97",
+        "Recruiting term: talent acquisition@130",
+        "Recruiting term: ressources humaines@1106",
+        "Employment term: role@311",
+        "Employment term: emploi@1001",
+        "Application cue: postulez des maintenant@791",
+        "Application cue: postulez@791",
+        "Job/careers link"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-22",
+    "lang": "fr",
+    "text": "🚀 nous recrutons – rejoignez une aventure industrielle en pleine croissance ! dans le cadre du developpement de nos activites dans le secteur industriel, nous renforcons nos equipes et recherchons des profils motives, rigoureux et orientes resultats pour les postes suivants : 🔹 responsable logistique 🔹 responsable moyens generaux 🔹 gestionnaire des stocks 🔹 planificateur 🔹 acheteur senior a l’international 🔹 comptable 🎯 nous recherchons des collaborateurs capables d’evoluer dans un environnement industriel exigeant, de contribuer a la structuration des activites et d’accompagner notre developpement. 📍 localisation : alger et/ou site industriel selon le poste 📩 vous souhaitez rejoindre nos equipes  envoyez votre cv a : recrutement@entreprise-eta.example 👉 merci d’indiquer l’intitule du poste dans l’objet de votre candidature. #recrutement #emploi #industrie #algerie #alger #logistique #supplychain #achats #stock #planification #moyensgeneraux #comptabilite #opportunite #carriere",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-07/",
+      "https://www.linkedin.com/in/auteur-21/",
+      "https://www.linkedin.com/feed/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23emploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23industrie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23algerie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23alger&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23logistique&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23supplychain&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23achats&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23stock&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23planification&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23moyensgeneraux&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23comptabilit%C3%A9&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23opportunit%C3%A9&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23carri%C3%A8re&origin=HASH_TAG_FROM_FEED"
+    ],
+    "note": "« Nous recrutons » with six named positions and email.",
+    "observed": {
+      "category": "open_role",
+      "score": 11,
+      "evidence": [
+        "Hiring phrase: nous recrutons@106",
+        "Hiring phrase: nous recherchons@510",
+        "Recruiting term: recrutement@905",
+        "Employment term: postes@359",
+        "Employment term: poste@744",
+        "Employment term: poste@863",
+        "Employment term: emploi@918",
+        "Application cue: envoyez votre cv@787",
+        "Email address",
+        "Email link",
+        "Hiring hashtag: #recrutement",
+        "Hiring hashtag: #emploi"
+      ]
+    }
+  },
+  {
+    "id": "rw-ar-23",
+    "lang": "ar",
+    "text": "لما احد يقدم استقالته بدون ما يكون عنده عرض وظيفي ثاني... انتبــــه طبيعي الناس تنتقل عشان منصب افضل او راتب اعلى هذا جزء من التطور لكن لما شخص يقرر يمشي بدون ما ينتظره اي وظيفة... هذا مو قرار مهني هذا جرس انذار في شيء داخل الشركة وصله لمرحلة ما عاد يقدر يتحمل الثقافة التنظيمية صارت سامة القيادة بعيدة عن الواقع التواصل بين الفرق صار ينهار الضغط صار اكبر من الدعم الجهد ما عاد يتقدر الناس نادر تمشي بس عشان الفلوس... يمشون لما المكان ما عاد يحسسهم بالامان، ولا بالعدل، ولا انه يستاهل طاقتهم الحفاظ على المواهب مو بدفع اكثر... بل بالاهتمام اكثر اذا اصلحت الاسباب اللي تطرد الناس... ما راح تحتاج تقنع احد انه يبقى تتفقون....؟",
+    "category": "hiring_discussion",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-22/",
+      "https://www.linkedin.com/in/auteur-23/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Arabic HR advice on resignation, culture and retention. No vacancy.",
+    "observed": {
+      "category": "possible",
+      "score": 2,
+      "evidence": [
+        "Recruiting term: talent acquisition@103",
+        "Employment term: منصب@295",
+        "Employment term: وظيفة@376"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-24",
+    "lang": "fr",
+    "text": "🔴 recrutement immediat ingenieurs maintenance 📍 lieu : sur tout le territoire national algerien 🔹 nombre de postes : non precise ✅ poste recherche : ingenieur maintenance 📌 profil requis : diplome d'ingenieur ou master en genie biomedical, maintenance, genie electrique, electromecanique, genie mecanique ou specialite connexe une experience en maintenance d'equipements et de materiels medicaux est un atout autonomie, rigueur, discipline et disponibilite permis de conduire souhaite 📌 a noter : le lieu d'affectation est defini selon le secteur geographique et le lieu de residence du candidat. 📩 comment postuler : envoyez votre cv a recrutement@entreprise-theta.example ⚠ precisez dans votre email le secteur geographique souhaite. ♻ partagez pour aider un ingenieur de votre reseau ! #recrutement #offredemploi #ingenieurmaintenance #geniebiomedical #maintenance #equipementsmedicaux #algerie #emploi",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-b",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23offredemploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23ing%C3%A9nieurmaintenance&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23g%C3%A9niebiom%C3%A9dical&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23maintenance&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23%C3%A9quipementsm%C3%A9dicaux&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23alg%C3%A9rie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23emploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "« Recrutement immédiat | ingénieurs maintenance », profile, how to apply, email.",
+    "observed": {
+      "category": "possible",
+      "score": 7,
+      "evidence": [
+        "Recruiting term: recrutement@197",
+        "Recruiting term: recrutement@945",
+        "Employment term: postes@299",
+        "Employment term: poste@320",
+        "Employment term: emploi@1054",
+        "Application cue: comment postuler@776",
+        "Application cue: envoyez votre cv@795",
+        "Email address",
+        "Email link",
+        "Hiring hashtag: #recrutement",
+        "Hiring hashtag: #offredemploi",
+        "Hiring hashtag: #emploi"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-25",
+    "lang": "fr",
+    "text": "🔎 a la recherche de nouvelles opportunites professionnelles je suis actuellement a l’ecoute de nouvelles opportunites professionnelles dans les domaines technique, commercial et des achats, ou je pourrais mettre a profit mes competences, mon experience et ma polyvalence. 💼 mes domaines de competences : ⚙ technique industrielle et equipements industriels 🔌 equipements electriques et electromecaniques 🔥 systemes de securite incendie et equipements hydrauliques 🛠 suivi technique des projets et coordination des interventions 📊 achats, consultations fournisseurs et negociation commerciale 🤝 developpement commercial et gestion de la relation client 📑 elaboration des offres techniques et commerciales, suivi des commandes et des dossiers clients motivee, rigoureuse et dotee d’un bon sens de l’organisation, je souhaite integrer une entreprise ou je pourrai contribuer activement a la realisation de projets techniques et au developpement de son activite. 📍 disponible pour etudier toute opportunite professionnelle, notamment dans la region de bejaia et ses environs. 🙏 je compte sur mon …",
+    "category": "job_seeker",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-24/",
+      "https://www.linkedin.com/in/auteur-25/",
+      "https://www.linkedin.com/feed/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23opportunit%C3%A9sprofessionnelles&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23technique&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23industrie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23achats&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23commerce&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23%C3%A9lectrotechnique&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23maintenanceindustrielle&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23d%C3%A9veloppementcommercial&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23alg%C3%A9rie&origin=HASH_TAG_FROM_FEED"
+    ],
+    "note": "« à la recherche de nouvelles opportunités professionnelles … à l'écoute ». Only bogus cue recommandation fired.",
+    "observed": {
+      "category": "job_seeker",
+      "score": 2,
+      "evidence": [
+        "Employment term: opportunites professionnelles@197",
+        "Employment term: opportunites professionnelles@272",
+        "Employment term: opportunite professionnelle@1132",
+        "Job-seeker cue: recommandation@1398"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-26",
+    "lang": "fr",
+    "text": "📢 je pars bientot en conge maternite... et je recherche la personne qui prendra le relais ! si vous aimez le recrutement, le sourcing, les relations ecoles, les projets marque employeur et les environnements ou ca bouge, ce poste est fait pour vous. rejoignez l'equipe rh de Cabinet Mu pour une aventure d'environ 9 mois au sein d'un cabinet en pleine croissance et d'une equipe vraiment sympa (promis 😉). 📍 rhone-alpes cdd 9 mois decembre 2026 📩 par ici pour candidater ! #recrutement #talentacquisition #rh #cabinetmu #hiring #jobopportunity",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-26/",
+      "https://www.linkedin.com/in/auteur-27/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23talentacquisition&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23rh&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23Cabinet Mu&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23hiring&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23jobopportunity&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/jobs/view/4400000003/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Maternity cover CDD, 9 months, application link. « we are hiring » came from the actor headline, not the body.",
+    "observed": {
+      "category": "open_role",
+      "score": 9,
+      "evidence": [
+        "Hiring phrase: we are hiring@98",
+        "Hiring phrase: offre d emploi@695",
+        "Hiring phrase: offre d emploi@802",
+        "Recruiting term: chargee de recrutement@70",
+        "Recruiting term: recrutement@81",
+        "Recruiting term: recrutement@231",
+        "Recruiting term: recrutement@588",
+        "Recruiting term: charge de recrutement@661",
+        "Recruiting term: recrutement@671",
+        "Recruiting term: charge de recrutement@719",
+        "Recruiting term: recrutement@729",
+        "Employment term: poste@342",
+        "Employment term: cdd@538",
+        "Employment term: cdd@685",
+        "Employment term: emploi@703",
+        "Employment term: cdd@743",
+        "Employment term: emploi@810",
+        "Job/careers link",
+        "Hiring hashtag: #recrutement",
+        "Hiring hashtag: #talentacquisition",
+        "Hiring hashtag: #hiring",
+        "Hiring hashtag: #jobopportunity"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-27",
+    "lang": "fr",
+    "text": "retour en images sur nabd by Association Lambda nous etions presents aux cotes d’Association Lambda en tant que sponsor de cette edition de nabd, un rendez-vous dedie aux startups etudiantes et a leurs projets. l’occasion pour nos equipes d’aller a la Entreprise Nuntre des etudiants, d’echanger avec eux et de partager notre univers de marques. cette participation a egalement ete marquee par l’implication de nos equipes ressources humaines et marketing a travers plusieurs temps forts, echanges avec les etudiants autour de l’employabilite et des opportunites professionnelles, decouverte de nos marques et de nos produits, participation au jury des startups etudiantes, ainsi qu’une conference dediee a l’innovation. une belle occasion de partager nos expertises, nos metiers et notre univers avec les talents de demain. bravo a nos jeunes talents pour leurs idees, leur creativite et leur audace !",
+    "category": "none",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-kappa",
+      "https://www.linkedin.com/company/entreprise-28/",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Company recap of sponsoring a student startup event. Reached possible via the actor headline ressources humaines.",
+    "observed": {
+      "category": "possible",
+      "score": 2,
+      "evidence": [
+        "Recruiting term: ressources humaines@453",
+        "Employment term: opportunites professionnelles@579"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-28",
+    "lang": "fr",
+    "text": "« la plupart des jobs que j’ai eu, je les ai trouver grace a Entreprise Tau. » quelques annees, plusieurs candidatures, des entretiens... et surtout, des opportunites qui ont marque son parcours professionnel. Auteur nous raconte son experience avec Entreprise Tau, la maniere dont elle a utilise la plateforme pour avancer dans sa recherche d’emploi, mais aussi son retour a Entreprise Tau connect 2026, notre salon de l’emploi et de la formation. cette fois, elle ne revient pas seulement en tant que candidate. elle revient avec son propre parcours, ses experiences et quelques conseils pour celles et ceux qui sont aujourd’hui a la recherche de leur prochaine opportunite. a votre tour de faire le prochain pas. 🔎 👉 decouvrez les offres et postulez sur Entreprise Tau : https://lnkd.example/offre-03",
+    "category": "hiring_discussion",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-29/",
+      "https://lnkd.example/offre-04",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Job-platform testimonial and trade-fair content: a candidate's experience of job searching plus a salon de l'emploi. Employment commentary, not a vacancy. postAge.label parsed as the literal string 'and'.",
+    "observed": {
+      "category": "possible",
+      "score": 3,
+      "evidence": [
+        "Employment term: jobs@70",
+        "Employment term: emploi@379",
+        "Employment term: emploi@450",
+        "Application cue: postulez@766"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-30",
+    "lang": "fr",
+    "text": "🚀 offre demploi ingenieur en intelligence artificielle (ia) 🏢 entreprise : SARL Epsilon 📢 nous recrutons !dans le cadre du developpement de nos projets de transformation digitale et dintelligence artificielle, SARL Epsilon recherche un ingenieur en intelligence artificielle (ia) confirme, passionne par les nouvelles technologies et capable de concevoir, developper et deployer des solutions ia innovantes dans le domaine du transport et de la logistique. 🎯 missions principales - concevoir, developper et deployer des solutions dintelligence artificielle adaptees aux besoins de lentreprise. - developper et integrer des modeles de machine learning et deep learning. - concevoir des systemes dautomatisation intelligente et des agents ia. - assurer la qualite, la performance et la fiabilite des solutions developpees. 💻 competences techniques recherchees - excellente maitrise de python et des bibliotheques associees. - bonne maitrise des frameworks pytorch, tensorflow et scikit-learn. - experience pratique avec les llm, rag, agents ia et api de modeles dintelligence artificielle.- bonne …",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-b",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Offre d'emploi – ingénieur IA, nous recrutons, how to apply.",
+    "observed": {
+      "category": "open_role",
+      "score": 9,
+      "evidence": [
+        "Hiring phrase: nous recrutons@280",
+        "Hiring phrase: profil recherche@1432",
+        "Recruiting term: recrutement@2342",
+        "Application cue: comment postuler@2044",
+        "Application cue: envoyez votre cv@2061",
+        "Email address",
+        "Email link",
+        "Hiring hashtag: #recrutement"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-31",
+    "lang": "fr",
+    "text": "📢 nous recrutons ! responsable transport dans le cadre du developpement de nos activites, nous recherchons: responsable transport 🎯 profil recherche : experience professionnelle est obligatoire. 📩 interesse(e)  envoyez votre cv par email: formation.recrutement@groupe-zeta.example n'hesitez pas a partager cette annonce avec votre reseau ! hashtag #recrutement #nousrecrutons #emploi #algerie #transport",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/in/auteur-30/",
+      "https://www.linkedin.com/company/entreprise-31/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23nousrecrutons&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23emploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23alg%C3%A9rie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23transport&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "« Nous recrutons ! Responsable transport », profile and email, inside a reshare wrapper.",
+    "observed": {
+      "category": "open_role",
+      "score": 11,
+      "evidence": [
+        "Hiring phrase: nous recrutons@104",
+        "Hiring phrase: nous recherchons@189",
+        "Hiring phrase: profil recherche@229",
+        "Recruiting term: recrutement@342",
+        "Recruiting term: recrutement@434",
+        "Employment term: emploi@462",
+        "Application cue: envoyez votre cv@304",
+        "Email address",
+        "Email link",
+        "Contact cue: par email@321",
+        "Hiring hashtag: #recrutement",
+        "Hiring hashtag: #nousrecrutons",
+        "Hiring hashtag: #emploi"
+      ]
+    }
+  },
+  {
+    "id": "rw-fr-32",
+    "lang": "fr",
+    "text": "🚀 recrutement charge de tresorerie et finances (baba-ali) nous recherchons un(e) charge(e) de tresorerie et finances rigoureux(se) et discret(e) pour rejoindre notre direction financiere et comptable a baba-ali. 🎯 vos missions principales : gerer les flux : preparer les reglements fournisseurs, au quotidien les soldes bancaires et assurer la relation avec les banques. controler les engagements : mettre a jour le fichier des engagements bancaires et les echeances de leasing. soutenir le cash : appuyer le suivi du credit clients et la relance des impayes. administrer : classer et archiver les pieces justificatives. 🔍votre profil : formation : bac+3/4 en finance, comptabilite ou banque. experience : 2 a 4 ans d'experience en tresorerie d'entreprise ou en milieu bancaire. competences : maitrise d'excel indispensable. pret(e) a relever le defi  envoyez votre cv a recrutement@entreprise-delta.example avec l'objet : ctf #recrutement #tresorerie #finance #comptabilite #emploialger #babaali #offredemploi",
+    "category": "open_role",
+    "hrefs": [
+      "https://www.linkedin.com/company/entreprise-07/",
+      "https://www.linkedin.com/search/results/all/?keywords=%23recrutement&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23tr%C3%A9sorerie&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23finance&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23comptabilit%C3%A9&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23emploialger&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23babaali&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/search/results/all/?keywords=%23offredemploi&origin=HASH_TAG_FROM_FEED",
+      "https://www.linkedin.com/feed/"
+    ],
+    "note": "Recrutement | chargé de trésorerie et finances, missions and email.",
+    "observed": {
+      "category": "open_role",
+      "score": 9,
+      "evidence": [
+        "Hiring phrase: nous recherchons@106",
+        "Recruiting term: recrutement@52",
+        "Recruiting term: recrutement@975",
+        "Application cue: envoyez votre cv@903",
+        "Email address",
+        "Email link",
+        "Hiring hashtag: #recrutement",
+        "Hiring hashtag: #offredemploi"
+      ]
+    }
+  }
+]

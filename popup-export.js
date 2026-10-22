@@ -95,38 +95,38 @@
     const post = migratePost(raw);
     const fields = shared.sanitizeHiringPreferences(preferences);
     if (!post) return null;
+    // Export schema 3 carries only what a reviewer reads: how to open the post, the verdict and
+    // why, who posted it, what was extracted, when it was posted, and the text. Internal
+    // bookkeeping stays inside the extension: per-run timestamps, history provenance, review
+    // labels, completeness flags and engagement metrics are used for merging, retention and
+    // ordering, and exporting them only made the file harder to read. `permalink` is always
+    // present — an export whose posts cannot be opened is not usable.
+    const signals = post.signals || {};
     const output = {
       id: post.id,
-      sourcePostId: post.sourcePostId,
+      permalink: post.permalink,
       category: post.category,
       confidence: post.confidence,
       score: post.score,
       evidence: post.evidence,
-      signals: post.signals,
-      firstSeenAt: post.firstSeenAt,
-      lastSeenAt: post.lastSeenAt,
-      contentComplete: post.contentComplete,
-      extractionStatus: post.extractionStatus,
-      historyStore: post.historyStore || null,
-      historyStores: post.historyStores || [],
-      reviewLabel: post.reviewLabel || null
+      // The remaining two signals are the ones a reviewer acts on: how to apply, and whether the
+      // post links to a job board. The rest are intermediate classifier state.
+      signals: { email: signals.email || "none", jobLink: Boolean(signals.jobLink) }
     };
     const extracted = {};
-    if (fields.includeFullText) output.fullText = post.fullText;
     if (fields.includeEmails) extracted.emails = post.extracted.emails || [];
     if (fields.includeJobTitles) extracted.jobTitles = post.extracted.jobTitles || [];
     if (fields.includePostMetadata) {
-      output.permalink = post.permalink;
       output.author = post.author;
       extracted.hashtags = post.extracted.hashtags || [];
       extracted.links = post.extracted.links || [];
     }
     if (Object.keys(extracted).length) output.extracted = extracted;
-    if (fields.includeMetrics) {
-      output.postAge = post.postAge || { label: null, publishedAt: null, ageSecondsApprox: null, ageDaysApprox: null };
-      output.metrics = post.metrics;
-      output.metricsCapturedAt = post.metricsCapturedAt || null;
+    if (fields.includePostAge) {
+      const age = post.postAge || {};
+      output.postAge = { label: age.label || null, publishedAt: age.publishedAt || null };
     }
+    if (fields.includeFullText) output.fullText = post.fullText;
     return output;
   }
 
@@ -144,7 +144,7 @@
         fullText: preferences.includeFullText,
         emails: preferences.includeEmails,
         jobTitles: preferences.includeJobTitles,
-        metrics: preferences.includeMetrics,
+        postAge: preferences.includePostAge,
         postMetadata: preferences.includePostMetadata
       },
       monitorRun: options.monitorRun || null,
@@ -158,40 +158,27 @@
     const projected = selectedPosts(posts, preferences).map((post) => projectPost(post, preferences)).filter(Boolean);
     const fields = [
       ["id", (post) => post.id],
-      ["sourcePostId", (post) => post.sourcePostId],
+      ["permalink", (post) => post.permalink],
       ["category", (post) => post.category],
       ["confidence", (post) => post.confidence],
       ["score", (post) => post.score],
       ["evidence", (post) => post.evidence],
-      ["signals", (post) => post.signals],
-      ["reviewLabel", (post) => post.reviewLabel],
-      ["firstSeenAt", (post) => post.firstSeenAt],
-      ["lastSeenAt", (post) => post.lastSeenAt],
-      ["contentComplete", (post) => post.contentComplete],
-      ["extractionStatus", (post) => post.extractionStatus],
-      ["historyStore", (post) => post.historyStore]
+      ["email", (post) => post.signals?.email],
+      ["jobLink", (post) => post.signals?.jobLink]
     ];
-    if (preferences.includeFullText) fields.push(["fullText", (post) => post.fullText]);
+    if (preferences.includePostAge) fields.push(
+      ["ageLabel", (post) => post.postAge?.label],
+      ["publishedAt", (post) => post.postAge?.publishedAt]
+    );
     if (preferences.includeEmails) fields.push(["emails", (post) => post.extracted?.emails]);
     if (preferences.includeJobTitles) fields.push(["jobTitleCandidates", (post) => post.extracted?.jobTitles]);
-    if (preferences.includeMetrics) fields.push(
-      ["ageLabel", (post) => post.postAge?.label],
-      ["publishedAt", (post) => post.postAge?.publishedAt],
-      ["ageSecondsApprox", (post) => post.postAge?.ageSecondsApprox],
-      ["ageDaysApprox", (post) => post.postAge?.ageDaysApprox],
-      ["reactions", (post) => post.metrics?.reactions],
-      ["comments", (post) => post.metrics?.comments],
-      ["reposts", (post) => post.metrics?.reposts],
-      ["views", (post) => post.metrics?.views],
-      ["metricsCapturedAt", (post) => post.metricsCapturedAt]
-    );
     if (preferences.includePostMetadata) fields.push(
-      ["permalink", (post) => post.permalink],
       ["authorName", (post) => post.author?.name],
       ["authorProfileUrl", (post) => post.author?.profileUrl],
       ["hashtags", (post) => post.extracted?.hashtags],
       ["links", (post) => post.extracted?.links]
     );
+    if (preferences.includeFullText) fields.push(["fullText", (post) => post.fullText]);
     const rows = [fields.map(([name]) => shared.csvCell(name)).join(",")];
     for (const post of projected) rows.push(fields.map(([, getValue]) => shared.csvCell(getValue(post))).join(","));
     return `\uFEFF${rows.join("\r\n")}`;

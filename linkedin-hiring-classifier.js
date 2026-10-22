@@ -16,6 +16,8 @@
       .replace(/[\u2010-\u2015\u2212\uFF0D]/g, "-")
       .replace(/[’‘`]/g, "'")
       .replace(/[_]+/g, " ")
+      // "son/sa responsable", "H/F", "CDI/CDD" and "et/ou" all use the slash as a separator.
+      .replace(/[/]+/g, " ")
       .replace(/[^\p{L}\p{N}#@.+:/-]+/gu, " ")
       .replace(/\s+/g, " ")
       .trim();
@@ -23,19 +25,30 @@
 
   function compilePhrase(value) {
     const phrase = normalizeText(value);
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    const tokens = phrase.split(/\s+/).filter(Boolean);
+    const escaped = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    // Real captured text puts a hashtag between words ("we're #hiring") and sometimes loses
+    // the space in a French elision ("offre demploi"), so word joins tolerate both. A single
+    // letter is an elision (d', l', n', s', j', c', m') and needs no separator at all.
+    const joined = escaped.reduce((accumulator, token, index) => {
+      if (index === 0) return token;
+      const elision = token.length === 1 || tokens[index - 1].length === 1;
+      return `${accumulator}${elision ? "[\\s#]*" : "[\\s#]+"}${token}`;
+    }, "");
     return {
       phrase,
-      pattern: new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "gu")
+      pattern: new RegExp(`(?<![\\p{L}\\p{N}])${joined}(?=$|[^\\p{L}\\p{N}])`, "gu")
     };
   }
 
   // Groups that are not literal phrase lists: regex frames and clause connectives.
-  const NON_PHRASE_GROUPS = new Set(["openingFrames", "negationConnectives"]);
+  const NON_PHRASE_GROUPS = new Set(["openingFrames", "negationConnectives", "jobSeekerFrames", "roleMarkerFrames"]);
   const compiledRules = Object.fromEntries(
     Object.entries(rules).filter(([key]) => !NON_PHRASE_GROUPS.has(key)).map(([key, phrases]) => [key, phrases.map(compilePhrase)])
   );
   const framePatterns = (rules.openingFrames || []).map((source) => new RegExp(source, "giu"));
+  const seekerFramePatterns = (rules.jobSeekerFrames || []).map((source) => new RegExp(source, "giu"));
+  const roleMarkerFramePatterns = (rules.roleMarkerFrames || []).map((source) => new RegExp(source, "giu"));
   const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const connectiveSources = (rules.negationConnectives || []).map((value) => escapeRegExp(normalizeText(value))).filter(Boolean);
   const connectivePattern = connectiveSources.length
@@ -59,9 +72,10 @@
     return occurrences.sort((a, b) => a.index - b.index || b.length - a.length);
   }
 
-  function findFrameOccurrences(normalizedText) {
+  function findFrameOccurrences(normalizedText, patterns = framePatterns) {
     const occurrences = [];
-    for (const pattern of framePatterns) {
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0;
       for (const match of normalizedText.matchAll(pattern)) {
         occurrences.push({ phrase: match[0].trim(), index: match.index, length: match[0].length });
       }
@@ -138,7 +152,18 @@
     const recruiterTermOccurrences = findOccurrences(normalized, "recruiterTerms");
     const jobTermOccurrences = findOccurrences(normalized, "genericJobTerms");
     const applicationOccurrences = findOccurrences(normalized, "applicationCta");
-    const jobSeekerOccurrences = findOccurrences(normalized, "jobSeeker");
+    // A seeker says "je recherche un poste"; an employer says "je recherche la personne".
+    // Both the phrase list and the subject-guarded frames feed the same signal.
+    const jobSeekerOccurrences = [
+      ...findOccurrences(normalized, "jobSeeker"),
+      ...findFrameOccurrences(normalized, seekerFramePatterns)
+    ].sort((a, b) => a.index - b.index || b.length - a.length);
+    const sponsoredOccurrences = findOccurrences(normalized, "sponsoredMarkers");
+    const roleMarkerOccurrences = [
+      ...findOccurrences(normalized, "roleMarkers"),
+      ...findFrameOccurrences(normalized, roleMarkerFramePatterns)
+    ].sort((a, b) => a.index - b.index || b.length - a.length);
+    const contractOccurrences = findOccurrences(normalized, "contractTerms");
     const adviceOccurrences = findOccurrences(normalized, "adviceNews");
     const closedOccurrences = findOccurrences(normalized, "closedOrNegative").filter((occurrence) => {
       if (occurrence.phrase !== "not hiring") return true;
@@ -159,16 +184,27 @@
     const jobSeekerHits = unnegated(normalized, jobSeekerOccurrences);
     const adviceHits = unnegated(normalized, adviceOccurrences);
     const contactHits = unnegated(normalized, contactOccurrences);
+    // The monitor reports sponsored placements it detected structurally, so the guard still
+    // works once the sponsored label itself has been stripped from the post text as chrome.
+    const sponsoredHits = options.sponsored === true && !sponsoredOccurrences.length
+      ? [{ phrase: "sponsored", index: 0, length: 9 }]
+      : sponsoredOccurrences;
+    const roleMarkerHits = roleMarkerOccurrences;
+    const contractHits = contractOccurrences;
     const hashtagHits = extractHashtagHits(text);
     const email = detectEmail(text);
     const emailLink = hasEmailLink(options.hrefs || []);
     const jobLink = hasJobLink(options.hrefs || []);
+    // Anything a reviewer could act on, as opposed to vocabulary that merely sounds like work.
+    const actionable = email.hit || emailLink || jobLink || applicationHits.length > 0 ||
+      contactHits.length > 0 || hashtagHits.length > 0;
 
     // "فرصة عمل" contains "عمل"; a phrase must not corroborate itself.
     const openingSpans = [...openingHits, ...intakeHits, ...frameHits];
     const independentJobTermHits = jobTermHits.filter((occurrence) => !openingSpans.some((span) =>
       occurrence.index < span.index + span.length && span.index < occurrence.index + occurrence.length));
     const jobTermVariety = new Set(jobTermHits.map((occurrence) => occurrence.phrase)).size;
+    const contractVariety = new Set(contractHits.map((occurrence) => occurrence.phrase)).size;
     const employmentContext = independentJobTermHits.length > 0 || jobLink;
     const frameOnly = frameHits.length > 0 && !openingHits.length && !intakeHits.length;
 
@@ -199,7 +235,12 @@
     let score = Math.max(openScore, recruiterScore);
     let confidence = "none";
 
-    if (closedOccurrences.length && !openingHits.length && !frameHits.length && !intakeHits.length && !recruiterSearchHits.length) {
+    if (sponsoredHits.length && !openingHits.length && !frameHits.length && !recruiterSearchHits.length) {
+      // A sponsored or promoted placement that names no vacancy is advertising, not a post.
+      category = "none";
+      confidence = "none";
+      score = 0;
+    } else if (closedOccurrences.length && !openingHits.length && !frameHits.length && !intakeHits.length && !recruiterSearchHits.length) {
       category = "closed";
       confidence = "likely";
       score = 0;
@@ -211,8 +252,10 @@
     } else if ((openingHits.length || frameHits.length) && openScore >= 4) {
       category = "open_role";
       confidence = openScore >= 6 ? "strong" : "likely";
-    } else if (intakeHits.length && employmentContext && openScore >= 4) {
-      // Opening-shaped intake phrasing needs independent employment context to be an opening.
+    } else if (intakeHits.length && employmentContext && openScore >= 4 && roleMarkerHits.length) {
+      // Opening-shaped intake phrasing needs independent employment context AND structural
+      // proof that a specific role is described. "Come discover our job offers" with a link
+      // and #recrutement is a marketing CTA, not a vacancy, and stays in the review bucket.
       category = "open_role";
       confidence = openScore >= 6 ? "strong" : "likely";
     } else if (recruiterSearchHits.length && recruiterScore >= 3) {
@@ -226,7 +269,12 @@
       category = "hiring_discussion";
       confidence = "likely";
       score = Math.max(score, 2);
-    } else if (positiveContext && (openScore >= 2 || recruiterScore >= 2 || hashtagHits.length || jobTermVariety >= 3)) {
+    } else if (positiveContext && (openScore >= 2 || recruiterScore >= 2 || hashtagHits.length || jobTermVariety >= 3) &&
+      (actionable || intakeHits.length || recruiterSearchHits.length || jobTermVariety >= 2)) {
+      // Employment vocabulary on its own is not a reason to open a review item: contract words
+      // and a stray "jobs" appear in career stories and platform marketing. Something must be
+      // actionable (email, link, application or contact cue, hiring hashtag), intake-shaped, or
+      // recruiter-search-shaped, or at least two distinct opportunity terms must be present.
       category = "possible";
       confidence = score >= 4 ? "review" : "low";
     }
@@ -246,6 +294,9 @@
     addOccurrenceEvidence("Job-seeker cue", jobSeekerHits);
     addOccurrenceEvidence("Advice/news cue", adviceHits);
     addOccurrenceEvidence("Closed/negative cue", closedOccurrences);
+    addOccurrenceEvidence("Role marker", roleMarkerHits);
+    addOccurrenceEvidence("Contract term", contractHits);
+    addOccurrenceEvidence("Sponsored/promoted placement", sponsoredHits);
     if (!openingHits.length && openingOccurrences.length) addOccurrenceEvidence("Negated hiring phrase", openingOccurrences);
     if (!frameHits.length && frameOccurrences.length) addOccurrenceEvidence("Negated vacancy frame", frameOccurrences);
     if (!intakeHits.length && intakeOccurrences.length) addOccurrenceEvidence("Negated intake phrase", intakeOccurrences);
@@ -274,6 +325,9 @@
         genericJobTerms: jobTermHits.length > 0,
         applicationCta: applicationHits.length > 0,
         jobSeeker: jobSeekerHits.length > 0,
+        sponsored: sponsoredHits.length > 0,
+        roleMarker: roleMarkerHits.length > 0,
+        contractTerms: contractVariety > 0,
         adviceNews: adviceHits.length > 0,
         closed: closedOccurrences.length > 0,
         email: email.kind,

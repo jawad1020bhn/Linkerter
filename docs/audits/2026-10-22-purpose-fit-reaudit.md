@@ -200,3 +200,69 @@ Everything repository-actionable above is implemented. Verified state: **`npm te
 
 1. **Eight corpus labels moved to `possible`.** Seven opening-shaped lookalikes (MBA intake, webinar, grant, entrance exam, volunteering, employer praise, employer marketing) and one title-only French post were labeled `none`/`open_role` in the first probe run and are now labeled `possible`. The requirement that matters — *never in Active openings* — is asserted separately and holds; `possible` is the review bucket, and "no hiring signal" would be wrong for text that does contain intake phrasing. This is a labeling decision, so it is stated here rather than buried in a fixture diff.
 2. **Accepted limitation:** a post that names only a job title with no hiring predicate, frame, or employment wording (`Notre équipe s'agrandit ! Rejoignez-nous en tant qu'ingénieur qualité.`) stays in `possible`. Detecting it would require occupational title families, which the domain invariants forbid. It is surfaced for review, not dropped.
+
+## Real-export verification (same day, after the owner supplied the first authenticated export)
+
+Evidence: `linkedin-hiring-posts-2026-10-22T04-02-52Z.json`, scan started 03:55:07Z, **32 archived posts**, `duplicateCardsMerged: 0`. `fieldsIncluded.fullText: false` and `fieldsIncluded.emails: false` are the owner's export toggles, not extraction failures; post text was recovered for analysis from the `text:` identities the run itself generated. Every number below is measured from that file.
+
+### Verdict on the six reported defects
+
+| # | Owner's report | Verdict | Measured evidence |
+|---|---|---|---|
+| 1 | Job-seeker posts systematically under-detected | **Confirmed** | `job_seeker` on **1/32**, and that single hit fired on a bogus cue (`recommandation@1398`) rather than on seeker phrasing. `jobSeeker` signal fired on 1/32 while at least two posts in the corpus are seeker posts. Post #14 (a seeker post) was archived as `possible`. |
+| 2 | Clear job postings stuck in `possible` with low scores | **Confirmed** | **4 of the 12** `possible` records are unambiguous vacancies (#5, #7, #11, #24): each carries an explicit opening predicate, a role, a location and an application route. |
+| 3 | False positives on non-job “applications” | **Confirmed** | #1 is a **sponsored LinkedIn Jobs advertisement**, archived as `possible` on the strength of `jobs@114` plus a `linkedin.com/jobs` link. No advertising rule existed, so any product placement shaped like a job board entered review. |
+| 4 | CV-sharing posts misclassified as `open_role` | **Partly refuted** | `envoyez votre cv` is an employer-side application instruction and is correct evidence for a vacancy; the CV-sharing posts in this export are employer posts. The genuine false positive is #10, promoted to `open_role` at score 7 by actor-headline words counted as body evidence. |
+| 5 | Cross-run deduplication absent | **Confirmed, structural** | `id` began with `text:` on **32/32** records and `sourcePostId` was null on **32/32**. A text identity changes with any wording or extraction change, so the same post is a new record on the next run. `duplicateCardsMerged: 0` is a consequence, not a success. |
+| 6 | `contentComplete: false` is the norm | **Confirmed and worse than reported** | **32/32**, not “often”. Every record was truncated at the “see more” marker, so application instructions, emails and requirements after it were silently lost. |
+
+Additional defects found in the same file, not in the report: `author.name` null on **32/32**; `permalink` null on **26/32**; `postAge.label` null on **31/32** and literally `"and"` on the remaining one; engagement metrics all-null on **28/32**; `jobTitles` empty on **27/32**; authorship wrong on every reshare/reaction wrapper (#3, #21, #22, #25, #31); extracted text retaining comments, reshares, job widgets and social counts; and the hidden accessibility label “Post du fil d'actualité” opening every single text. Six records (#6, #15, #16, #17, #20, #29) stored their text as `url:<permalink>` while their evidence indices reached 1123–2061, which is the identity fallback of last resort being reached with unusable input.
+
+### Root causes
+
+1. **Root selection took the outer feed wrapper while the card sat inside it.** `belongsToPostRoot` refused to descend through `data-urn`/`role=article` boundaries, so the body node resolved to the card root itself (`body === root`) — which is precisely the `partial` condition, hence 32/32 — the actor block was rejected as not belonging to the post, and identity was searched in ancestors only.
+2. **The real cards carry no `data-urn` or `data-id`.** The post URN survives only inside the permalink anchor `href`, so an attribute-only identity search could never find it.
+3. **`innerText` is empty for occluded cards.** `content-visibility` occlusion (`occludable-update`) means the `innerText` path returns nothing and extraction fell back to raw `textContent` for all 32 records — which is how hidden labels, buttons, counts and comments entered every text and then every classification. `genericJobTerms` fired on 29/32 records and `recruiterTerms` on 21/32: signals with no discriminative power, because much of what they matched was actor headlines and page chrome rather than post text.
+
+Fixture-driven confidence was false here: the browser fixture encoded the assumptions that the export refuted. That is why the fix is paired with a corpus and a fixture taken from observed markup.
+
+### What changed
+
+- **Identity** (`linkedin-hiring-monitor.js`): post URN patterns for activity/share/ugcPost/jobPosting; identity read from `data-urn`, `data-id`, `data-entity-urn`, `data-urn-public`, `id`, then from descendant nodes, then from hrefs inside the card; permalink derived from the URN when no anchor canonicalizes. A containment boundary now stops descent only when it carries a *different* identity, so a URN-less inner card is not a separate post.
+- **Text**: body selectors extended to the `update-components-text` and `feed-shared-update-v2__description` families; chrome removal by clone-and-remove over a frozen selector list (actor blocks, control menus, social-action bars, comment threads, sponsored labels, buttons, visually-hidden nodes) instead of brittle substring splicing; `partial`, `usedCardFallback`, `sponsored` and `fullTextAvailableWithoutExpansion` reported next to the text. `partial` keeps its strict meaning.
+- **Scope**: the detected content resolves to the innermost real content scope (reshare/reactor container when present), and identity, permalink, author and metrics are read from that scope.
+- **Age**: EN/FR/AR absolute date patterns parse to a real `publishedAt` (12:00 UTC, rolled back a year when the date would be in the future); relative units now require a preceding digit, which removes the `"and"` label.
+- **Sponsored**: detected from the card itself and passed to the classifier; advertising copy without a vacancy is `none`, so it is never archived.
+- **Classifier and rules** (`linkedin-hiring-classifier.js`, `linkedin-hiring-rules.js`): phrase compilation joins tokens on `[\s#]+` so French elisions and in-phrase hashtags match; `genericJobTerms` split into opportunity terms and non-scoring `contractTerms`; new FR/EN/AR opening, role-marker, seeker and sponsored marker groups; intake promotion requires a role marker; `possible` requires an actionable route, intake evidence, a recruiter search or two independent job-term families; sponsored-without-vacancy resolves to `none`.
+
+### Re-measurement
+
+| Gate | Before this round | After |
+|---|---|---|
+| `npm test` | 125/125 | **137/137** (8 new tests against observed 2026 markup, plus 4 fixture-sanitization tests) |
+| `npm run probe:classifier -- --strict` (113-case gate) | accuracy 0.785 on 87 cases; `open_role` P/R 0.75/0.889 | **accuracy 1.000 (113/113)**; P/R 1.0 for all seven categories; `open_role` **0** false positives, **0** false negatives; en 46/46, fr 32/32, ar 13/13, unlabeled 22/22 |
+| Real-world subset (26 sanitized posts from the export) | correct on **13/26** (accuracy 0.500) | correct on **26/26** (accuracy 1.000) |
+| `npm run probe:feed -- --strict` | clean | clean |
+| `bash scripts/verify-superpowers.sh` | 9/9 | 9/9 |
+| `npm run test:browser` | NOT RUN (no Chrome here) | NOT RUN — still owner-gated (PF-03) |
+
+### Sanitization of the real-world corpus
+
+The corpus is derived from a real authenticated export, and the first build of it leaked: 35 real `linkedin.com/in/` and `/company/` URLs with member ids (`…-215574133`), four real personal and organizational mailboxes (`@gmail.com`, a real company domain), third-party shortlinks and a booking page carrying a real username (`calendly.com/<real-name>/…`, `lnkd.in/…`, `ow.ly/…`) wrapped in LinkedIn safety redirects with `urlhash` tracking, three real job-posting ids with `trackingId` tokens, one real organization hashtag, and a real first name plus brand inside post text. All were found by scanning the fixture against the export's own identifier set and against a URL/email/slug/phone inventory, and all are now pseudonymized: placeholder slugs (`auteur-NN`, `entreprise-NN`), reserved `.example` mailboxes and hosts, synthetic job ids, tracking parameters removed, and the name and brand replaced. The gate was re-run after each pass and is unchanged at 1.000, so sanitization did not weaken the corpus.
+
+This is now enforced rather than remembered: `tests/unit/fixture-sanitization.test.js` fails the build if a real-derived fixture contains a non-reserved email domain, a non-placeholder profile or company slug, a third-party host, a LinkedIn safety redirect, a member tracking parameter or a phone number, and fails for *any* fixture that carries a profile URL ending in a real numeric or hex member id. The test was verified non-vacuous by injecting a leaked member URL and mailbox and watching it fail, then restoring the fixture byte-identically. Cities and generic hiring hashtags were deliberately kept: they are the regional and role signal under test and identify no person.
+
+The 13 real-world cases the shipped run got wrong, and what they classify as now: rw-en-01 `possible/3`→`none/0` (sponsored ad), rw-fr-03 `possible/2`→`none/0`, rw-ar-05 `possible/3`→`open_role/6`, rw-fr-07 `possible/6`→`open_role/8`, rw-fr-09 `open_role/6`→`hiring_discussion/4`, rw-fr-10 `open_role/7`→`possible/4`, rw-fr-11 `possible/4`→`open_role/4`, rw-fr-14 `possible/2`→`job_seeker/2`, rw-ar-18 `possible/2`→`hiring_discussion/2`, rw-ar-23 `possible/2`→`hiring_discussion/2`, rw-fr-24 `possible/7`→`open_role/10`, rw-fr-27 `possible/2`→`none/2`, rw-fr-28 `possible/3`→`hiring_discussion/3`.
+
+### Judgment calls recorded for review
+
+1. **Engagement counts are never inferred from bare numbers.** In the export, the bare numbers inside a card were dates and follower counts as often as reactions/reposts/comments, and the only four records that carried metrics got them from typed labels. Positional inference would have manufactured plausible wrong numbers, so metrics stay null without typed evidence; only their scoping was fixed.
+2. **`partial` semantics were preserved, not relaxed.** The reported `contentComplete: false` problem was a body-selection failure, so the fix makes the body findable. A record with an unexpanded see-more control still reports `partial`, and partial-only records are still never archived.
+3. **The lookalike-host test was updated, not weakened.** `tests/dom/monitor-extraction.test.js` asserted `permalink === null` for a card whose only anchors point at a non-LinkedIn host. A permalink may now be built from the card's own post URN, which is trusted identity rather than an href; the test now asserts the synthesized LinkedIn permalink *and* that no lookalike host can become the permalink or the author identity.
+4. **Two corpus labels were decided on the merits.** `rw-ar-18` and `rw-fr-28` are commentary about hiring rather than vacancies or advertising, so they are labeled `hiring_discussion`. They were not relabeled to match code output; both were checked against the labeling contract before the change.
+5. **Six export records were excluded from the corpus** (#6, #15, #16, #17, #20, #29) because the run stored no usable post text for them. Their identity path — the `text:` fallback reached with unusable input — is removed by the URN fallback rather than papered over, and the mechanism is documented here instead of being guessed at.
+
+### Still open
+
+- **PF-03 remains owner-gated:** paste `docs/ci/ci.yml` into `.github/workflows/ci.yml`, then run `REQUIRE_CHROME=1 npm run test:browser`. Until then the Chrome `innerText` text path is exercised only by the browser fixture, and this round's changes are verified under jsdom, where `innerText` is absent and the `textContent` fallback runs — the same path the real export proved was being taken.
+- The next authenticated export is the real acceptance test for extraction: the expectation is `sourcePostId` non-null on every post, `author.name` non-null, `contentComplete: true` where the feed exposed no see-more control, `postAge.label` a real date, `duplicateCardsMerged > 0` across runs, and no sponsored placement in any bucket.

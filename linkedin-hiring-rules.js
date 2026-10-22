@@ -22,7 +22,8 @@
       // French
       "nous recrutons", "on recrute", "nous embauchons", "on embauche", "recrutement en cours",
       "nous recherchons des candidats", "nous recherchons", "on recherche", "poste à pourvoir",
-      "postes à pourvoir", "poste vacant", "postes vacants", "offre d'emploi", "offres d'emploi",
+      "postes à pourvoir", "poste vacant", "postes vacants", "offre d'emploi",
+      "recrutement immédiat", "opportunité d'emploi", "poste est fait pour vous", "ce poste est fait pour vous",
       "plusieurs postes ouverts", "poste ouvert", "postes ouverts",
       "je recrute", "nous sommes à la recherche", "recrutement urgent", "profil recherché", "profils recherchés",
       "nous cherchons des candidats", "nous avons des postes", "poste à combler", "postes à combler",
@@ -31,6 +32,7 @@
       "نبحث عن موظفين", "مطلوب للعمل", "مطلوب موظف",
       "مطلوب موظفين", "مطلوبة للعمل", "وظيفة شاغرة", "وظائف شاغرة",
       "منصب شاغر", "مناصب شاغرة", "نستقبل طلبات التوظيف", "التوظيف مستمر", "توظيف فوري",
+      "المنصب المطلوب", "المطلوب للعمل",
       "توظيف عاجل", "نحتاج إلى موظف", "نحتاج إلى موظفين", "أرسل سيرتك الذاتية", "أرسلوا السيرة الذاتية",
       "للتقديم يرجى", "للتقديم أرسل",
     ],
@@ -44,7 +46,8 @@
       "applications now open", "referrals welcome", "we're expanding our team", "we are expanding our team",
       // French
       "rejoignez notre équipe", "rejoignez-nous", "intégrer notre équipe", "notre équipe s'agrandit",
-      "candidatures ouvertes", "nous acceptons les candidatures",
+      "candidatures ouvertes", "nous acceptons les candidatures", "offres d'emploi", "nos offres d'emploi",
+      "découvrez nos offres", "venez découvrir nos offres",
       // Arabic
       "انضم إلى فريقنا", "انضمي إلى فريقنا", "انضموا إلى فريقنا", "التقديم مفتوح", "باب التقديم مفتوح",
       "فرصة عمل", "فرص عمل", "فرصة تدريب", "تدريب متاح"
@@ -57,7 +60,72 @@
       // "Hiring: <title>" / "Hiring - <title>" as a post headline.
       "(?:^|\\.\\s)hiring\\s*[:\\-]\\s*\\S",
       // "مطلوب <one to three words> للعمل|للانضمام|في …" — the common Arabic vacancy frame.
-      "مطلوب(?:\\s+\\S+){1,3}\\s+(?:للعمل|للانضمام|في)"
+      "مطلوب(?:\\s+\\S+){1,3}\\s+(?:للعمل|للانضمام|في)",
+      // French third-person hiring predicate taking a complement: "<entreprise> recrute !",
+      // "recrute pour son site", "recrute un(e) …", "recrutent 04 …". Deliberately not the
+      // noun "recrutement", which commentary posts also use.
+      "(?<!\\p{L})recrut(?:e|ent)(?!\\p{L})(?:\\s*[!:|]\\s*|\\s+(?:un|une|des|du|pour|son|sa|ses|nos|notre|votre|vos|leur|leurs|ce|cette|cet|\\d))",
+      // Employer-side first person looking for a person, as opposed to a job seeker looking
+      // for a job: "je recherche la personne / un profil / un candidat".
+      "je\\s+(?:recherche|cherche)\\s+(?:la|le|un|une|du|des)\\s+(?:personne|profil|candidat|candidate|talent|collaborateur|collaboratrice|alternant|stagiaire|remplacement)\\b",
+      // "<company> recherche son/sa <role>" and "we are looking for a/an <role>".
+      "(?:recherche|recherchons)\\s+(?:son|sa|notre|nos)\\s+(?:\\p{L}+)\\b",
+      "we\\s+(?:are|'re)?\\s*(?:looking|hiring)\\s+for\\s+(?:a|an|the|\\d)\\b",
+      // Arabic hiring headlines: "توظيف | …", "توظيف فوري", "المنصب المطلوب: …".
+      "(?:^|[\\s|:])توظيف(?:\\s*[|:!\\-]\\s*|\\s+(?:فوري|عاجل|مباشر|حاليا|في))",
+      "المنصب\\s+المطلوب\\s*(?:[:|]|$)"
+    ],
+
+    // Evidence that a specific role is described, not merely that openings exist somewhere.
+    // Intake phrasing ("join our team", "browse our offers") may only be promoted to an
+    // active opening when one of these structural markers is present. No occupational
+    // title families: these are section headers and ad conventions.
+    roleMarkers: [
+      "(h/f)", "h/f", "f/h", "(m/f)", "m/f",
+      "poste suivant", "postes suivants", "nombre de postes", "pour le poste de", "pour un poste de",
+      "au poste de", "vos missions", "missions principales", "profil requis", "profil recherché",
+      "profils recherchés", "qualifications requises", "expérience professionnelle", "lieu de travail",
+      "type de contrat", "prise de fonction", "candidature : ", "objet du mail",
+      "key responsibilities", "responsibilities:", "requirements:", "qualifications:", "job description",
+      "as our new", "join our team as", "join the team as", "rejoignez notre équipe en tant que",
+      "rejoignez l'équipe en tant que", "work location", "employment type",
+      "الشروط", "المؤهلات", "المنصب المطلوب", "مهام الوظيفة", "خبرة مهنية", "مكان العمل", "طبيعة العقد"
+    ],
+
+    // Intake phrasing whose grammatical object is a role or position, as opposed to a
+    // programme, grant, exam, or event. Structural only: no occupational title families.
+    roleMarkerFrames: [
+      "(?:applications?|candidatures?)\\s+(?:are|is|now|sont|est)?\\s*(?:open|ouvertes?)\\s+(?:for|pour|to)\\s+(?:the|a|an|our|le|la|les|un|une|notre|nos)\\s+[\\p{L}\\s'\'-]{0,40}?\\b(?:role|position|job|poste|emploi|fonction)\\b",
+      "(?:we|on|nous)\\s+(?:are\\s+)?(?:hiring|recruiting|recrute|recrutons)\\s+(?:for\\s+)?(?:a|an|the|un|une|le|la|des|du)\\s+[\\p{L}\\s'\'-]{0,40}?\\b(?:role|position|job|poste|emploi)\\b"
+    ],
+
+    // Sponsored and promoted placements are advertising, not posts. A promoted post that
+    // still names a vacancy keeps its normal classification; platform and brand advertising
+    // that names none must never enter the opening buckets.
+    sponsoredMarkers: [
+      "post sponsorisé", "publication sponsorisée", "annonce sponsorisée", "sponsorisé",
+      "sponsored post", "sponsored", "promoted post", "promoted",
+      "منشور ممول", "إعلان ممول", "ممول"
+    ],
+
+    // First-person job-seeker frames. The subject and the object both matter: a seeker looks
+    // for a *job*, an employer looks for a *person*. Without this split "je recherche …" is
+    // ambiguous and real seeker posts fall into `possible`.
+    jobSeekerFrames: [
+      "je\\s+(?:recherche|cherche)\\s+(?:un|une|le|la|mon|ma|du|des|nouveau|nouvelle)\\s*(?:\\p{L}+\\s+){0,2}?(?:poste|emploi|travail|job|opportunité|alternance|stage|mission|contrat)\\b",
+      "(?:je\\s+suis|je\\s+me\\s+tiens)\\s+(?:actuellement\\s+)?(?:à\\s+l'écoute|à\\s+la\\s+recherche|en\\s+recherche|disponible)\\b",
+      "à\\s+(?:la\\s+recherche|l'écoute)\\s+(?:de|d'|du)\\s*(?:nouvelles?\\s+)?(?:opportunités?|postes?|emplois?|offres?|marché)\\b",
+      "je\\s+souhaite\\s+intégrer\\s+(?:une|votre|une\\s+nouvelle)\\s+entreprise\\b",
+      "disponible\\s+pour\\s+(?:étudier\\s+)?toute\\s+opportunité",
+      "i\\s+(?:am|'m)\\s+(?:currently\\s+)?(?:looking|searching|on\\s+the\\s+look)\\s+(?:for|out)\\s+(?:for\\s+)?(?:a|an|my|the|new)\\b[^.!?]{0,40}(?:job|role|position|opportunity|opportunities|work|challenge)",
+      "i\\s+(?:am|'m)\\s+open\\s+to\\s+(?:new\\s+)?(?:opportunities|roles|offers|work|relocation)\\b",
+      "open\\s+to\\s+work\\b",
+      "recently\\s+(?:made\\s+redundant|laid\\s+off)\\b",
+      "looking\\s+for\\s+my\\s+next\\s+(?:role|job|position|opportunity)\\b",
+      "(?:أبحث|ابحث)\\s+عن\\s+(?:عمل|وظيفة|فرصة|منصب|تدريب|شغل)\\b",
+      "(?:باحث|باحثة)\\s+عن\\s+(?:عمل|وظيفة|فرصة)\\b",
+      "(?:مهتم|مهتمت)\\s+(?:بالفرص|بايجاد|بإيجاد|بعمل)\\b",
+      "على\\s+استعداد\\s+(?:للعمل|للانضمام)\\b"
     ],
 
     // Clause connectives that end a negation's scope. Without them a negation in one clause
@@ -101,15 +169,25 @@
       // Generic employment vocabulary only; no occupation/title list.
       "job", "jobs", "employment", "career opportunity", "career opportunities", "vacancy", "vacancies",
       "opening", "openings", "position", "positions", "role", "roles", "job description", "job posting",
-      "application link", "careers page", "full time", "part time", "permanent position", "contract role",
-      "temporary role", "freelance role", "remote position", "hybrid position", "internship", "internships",
-      "graduate role", "apprenticeship", "emploi", "emplois", "poste", "postes", "fonction", "mission",
+      "application link", "careers page",
+      "emploi", "emplois", "poste", "postes",
       "opportunité d'emploi", "opportunités d'emploi", "opportunité professionnelle", "opportunités professionnelles",
-      "cdi", "cdd", "intérim", "temps plein", "temps partiel", "freelance", "stage", "alternance",
-      "apprentissage", "télétravail", "emploi à distance", "وظيفة", "وظائف", "عمل", "أعمال", "فرصة مهنية",
+      "وظيفة", "وظائف", "عمل", "أعمال", "فرصة مهنية",
       "منصب", "مناصب", "شاغر", "شواغر", "طلب توظيف", "استمارة التقديم", "رابط التقديم", "وصف الوظيفة",
+      "حديث التخرج"
+    ],
+
+    // Contract and working-arrangement vocabulary. Reported as context and evidence, but it
+    // never creates employment context, term variety, or a `possible` verdict on its own:
+    // freelance/CDI/remote wording appears in career stories and agency marketing too.
+    contractTerms: [
+      "full time", "part time", "permanent position", "contract role", "temporary role",
+      "freelance role", "remote position", "hybrid position", "internship", "internships",
+      "graduate role", "apprenticeship", "cdi", "cdd", "intérim", "temps plein", "temps partiel",
+      "freelance", "stage", "alternance", "apprentissage", "télétravail", "emploi à distance",
+      "fonction", "mission", "contrat",
       "دوام كامل", "دوام جزئي", "عقد دائم", "عقد محدد المدة", "عمل مؤقت", "عمل حر", "تدريب", "متدرب",
-      "تدريب مهني", "حديث التخرج", "عمل عن بعد", "دوام هجين"
+      "تدريب مهني", "عمل عن بعد", "دوام هجين"
     ],
 
     applicationCta: [
@@ -119,6 +197,7 @@
       "postulez", "postulez ici", "postulez dès maintenant", "comment postuler", "envoyez votre cv",
       "envoyez-moi votre cv", "transmettez votre cv", "envoyez votre candidature", "déposez votre candidature",
       "candidature à envoyer", "merci d'envoyer votre cv", "cv et lettre de motivation", "lien de candidature",
+      "pour candidater", "par ici pour candidater", "candidater dès maintenant", "pour postuler",
       "قدّم طلبك", "قدم طلبك", "للتقديم", "للتقديم يرجى", "أرسل سيرتك الذاتية", "أرسلوا السيرة الذاتية",
       "أرسل سيرتك", "يرجى إرسال السيرة الذاتية", "رابط التقديم", "التقديم عبر الرابط", "املأ استمارة التقديم"
     ],
@@ -129,8 +208,15 @@
       "seeking referrals", "can anyone refer me", "please refer me", "job search update",
       "à la recherche d'un emploi", "je cherche un emploi", "recherche un emploi", "recherche d'un poste",
       "je cherche un poste", "en recherche d'opportunités", "ouvert aux opportunités", "ouverte aux opportunités",
-      "disponible immédiatement", "je cherche une alternance", "je cherche un stage", "recommandation",
-      "parrainage", "أبحث عن عمل", "أبحث عن وظيفة", "أبحث عن فرصة عمل", "أبحث عن منصب", "متاح للعمل",
+      "disponible immédiatement", "je cherche une alternance", "je cherche un stage",
+      "je recherche un nouveau poste", "je recherche un poste", "je recherche un emploi",
+      "je recherche activement", "je suis à l'écoute", "à l'écoute de nouvelles opportunités",
+      "à l'écoute du marché", "à la recherche de nouvelles opportunités", "je souhaite intégrer une entreprise",
+      "disponible pour étudier toute opportunité", "je suis en recherche d'emploi", "recherche activement un poste",
+      "i am looking for a new role", "i am looking for a new position", "i am looking for my next",
+      "open to opportunities", "open to new opportunities", "seeking new opportunities",
+      "أبحث عن عمل", "أبحث عن وظيفة", "أبحث عن فرصة عمل", "أبحث عن منصب", "متاح للعمل",
+      "باحث عن عمل", "باحثة عن عمل",
       "متاحة للعمل", "أبحث عن تدريب", "أبحث عن فرصة تدريب", "أحتاج إلى إحالة", "أبحث عن ترشيح",
       "مفتوح للعمل", "مفتوحة للعمل"
     ],
@@ -142,8 +228,12 @@
       "lessons from hiring", "hiring news", "hiring market", "future of hiring", "recruitment insights",
       "conseils de recrutement", "comment recruter", "stratégie de recrutement", "tendances du recrutement",
       "conseils d'entretien", "processus de recrutement", "actualités rh", "marché du recrutement",
+      "retours d'expérience", "retour d'expérience", "témoignage", "témoignages", "nous raconte",
+      "salon de l'emploi", "marque employeur", "congrès", "webinaire",
       "نصائح التوظيف", "كيفية التوظيف", "استراتيجيات التوظيف", "أخبار التوظيف", "اتجاهات سوق العمل",
-      "نصائح المقابلة", "تجربة التوظيف", "سوق العمل"
+      "نصائح المقابلة", "تجربة التوظيف", "سوق العمل",
+      "استقالة", "الثقافة التنظيمية", "الحفاظ على المواهب", "بيئة العمل", "الاحتفاظ بالموظفين",
+      "سوق الوظائف", "عالم التوظيف"
     ],
 
     closedOrNegative: [

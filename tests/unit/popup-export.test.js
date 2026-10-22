@@ -16,22 +16,29 @@ const complete = {
   postAge: { label: "1d", publishedAt: null, ageSecondsApprox: 86400, ageDaysApprox: 1 }
 };
 
-test("fresh-install projection defaults omit full text and emails but retain complete signals", () => {
+test("fresh-install projection defaults omit full text and emails and carry only reviewer fields", () => {
   const projected = exporter.projectPost(complete);
   assert.equal(projected.fullText, undefined);
   assert.equal(projected.extracted?.emails, undefined);
   assert.equal(projected.extracted.jobTitles[0], "Engineer");
-  assert.deepEqual({ ...projected.signals }, complete.signals);
   assert.equal(projected.author.name, "Employer");
-  assert.equal(projected.metrics.reactions, 2);
+  assert.equal(projected.permalink, "https://www.linkedin.com/posts/acme_activity-1");
+  // Schema 3: signals are reduced to what a reviewer acts on, and the internal
+  // classifier flags, timestamps, provenance, completeness and metrics are not exported.
+  assert.deepEqual({ ...projected.signals }, { email: "none", jobLink: false });
+  assert.deepEqual({ ...projected.postAge }, { label: "1d", publishedAt: null });
+  for (const dropped of ["sourcePostId", "reviewLabel", "firstSeenAt", "lastSeenAt", "historyStore",
+    "historyStores", "contentComplete", "extractionStatus", "metrics", "metricsCapturedAt"]) {
+    assert.ok(!(dropped in projected), `${dropped} must not be exported`);
+  }
 });
 
-test("JSON schema v2 applies selected fields and categories", () => {
+test("JSON schema v3 applies selected fields and categories", () => {
   const payload = exporter.buildJsonPayload([complete, { ...complete, id: "urn:2", category: "closed" }], {
     preferences: { exportFilteredOnly: true, filter: "open_role", includeFullText: true, includeEmails: false },
     now: () => "2026-10-21T00:00:00.000Z"
   });
-  assert.equal(payload.schemaVersion, "2.0");
+  assert.equal(payload.schemaVersion, "3.0");
   assert.equal(payload.posts.length, 1);
   assert.equal(payload.posts[0].fullText, complete.fullText);
   assert.equal(payload.posts[0].extracted.emails, undefined);

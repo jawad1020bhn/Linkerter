@@ -21,7 +21,7 @@ const DEFAULT_HIRING_PREFS = {
   includeFullText: false,
   includeEmails: false,
   includeJobTitles: true,
-  includeMetrics: true,
+  includePostAge: true,
   includePostMetadata: true,
   keepHistory: false,
   historyMode: "off",
@@ -96,7 +96,7 @@ const elements = {
   includeFullText: $("#includeFullText"),
   includeEmails: $("#includeEmails"),
   includeJobTitles: $("#includeJobTitles"),
-  includeMetrics: $("#includeMetrics"),
+  includePostAge: $("#includePostAge"),
   includePostMetadata: $("#includePostMetadata"),
   processedDetail: $("#processedDetail"),
   exportBtn: $("#exportBtn"),
@@ -264,7 +264,7 @@ function readHiringPrefs() {
     includeFullText: elements.includeFullText.checked,
     includeEmails: elements.includeEmails.checked,
     includeJobTitles: elements.includeJobTitles.checked,
-    includeMetrics: elements.includeMetrics.checked,
+    includePostAge: elements.includePostAge.checked,
     includePostMetadata: elements.includePostMetadata.checked,
     historyMode: ["off", "session", "persistent"].includes(elements.historyMode.value) ? elements.historyMode.value : "off",
     keepHistory: elements.historyMode.value !== "off",
@@ -923,7 +923,7 @@ async function clearAllStoredData() {
     elements.includeFullText.checked = false;
     elements.includeEmails.checked = false;
     elements.includeJobTitles.checked = true;
-    elements.includeMetrics.checked = true;
+    elements.includePostAge.checked = true;
     elements.includePostMetadata.checked = true;
     elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
@@ -1092,7 +1092,7 @@ async function initialize() {
       hiringPrefs.historyMode = hiringPrefs.keepHistory ? "persistent" : "off";
     }
     hiringPrefs.keepHistory = hiringPrefs.historyMode !== "off";
-    for (const key of ["includeFullText", "includeEmails", "includeJobTitles", "includeMetrics", "includePostMetadata"]) {
+    for (const key of ["includeFullText", "includeEmails", "includeJobTitles", "includePostAge", "includePostMetadata"]) {
       hiringPrefs[key] = hiringPrefs[key] !== false;
     }
     elements.autoExpand.checked = hiringPrefs.autoExpand !== false;
@@ -1106,7 +1106,7 @@ async function initialize() {
     elements.includeFullText.checked = hiringPrefs.includeFullText;
     elements.includeEmails.checked = hiringPrefs.includeEmails;
     elements.includeJobTitles.checked = hiringPrefs.includeJobTitles;
-    elements.includeMetrics.checked = hiringPrefs.includeMetrics;
+    elements.includePostAge.checked = hiringPrefs.includePostAge;
     elements.includePostMetadata.checked = hiringPrefs.includePostMetadata;
     elements.historyMode.value = hiringPrefs.historyMode;
     elements.keepHistory.checked = hiringPrefs.historyMode !== "off";
@@ -1130,7 +1130,7 @@ async function initialize() {
     elements.includeFullText.checked = false;
     elements.includeEmails.checked = false;
     elements.includeJobTitles.checked = true;
-    elements.includeMetrics.checked = true;
+    elements.includePostAge.checked = true;
     elements.includePostMetadata.checked = true;
     elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
@@ -1235,7 +1235,7 @@ async function initialize() {
   elements.matchesOnly.addEventListener("change", () => void updateMonitorPreferences());
 
   [elements.exportFormat, elements.exportFilteredOnly, elements.includeFullText, elements.includeEmails,
-    elements.includeJobTitles, elements.includeMetrics, elements.includePostMetadata]
+    elements.includeJobTitles, elements.includePostAge, elements.includePostMetadata]
     .forEach((element) => element.addEventListener("change", async () => {
       try {
         await saveHiringPrefs();
