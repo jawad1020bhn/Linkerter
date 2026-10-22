@@ -62,7 +62,7 @@ Check this table BEFORE every response or action:
 
 ## Linkerter Project Overview & Architecture
 
-**Linkerter** (**LinkedIn Feed Scroller**, v1.9.0) is a zero-dependency **Manifest V3 Chrome Extension** for adaptive human-like LinkedIn feed scrolling and local multilingual (English, French, Arabic + optional weak Algerian dialect/Arabizi) hiring/recruiting post detection.
+**Linkerter** (**LinkedIn Feed Scroller**, v2.0.0) is a zero-dependency **Manifest V3 Chrome Extension** for adaptive human-like LinkedIn feed scrolling and local multilingual (English, French, Arabic + optional weak Algerian dialect/Arabizi) hiring/recruiting post detection.
 
 ### Key Source Files
 

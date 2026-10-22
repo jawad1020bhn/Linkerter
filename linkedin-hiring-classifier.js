@@ -13,6 +13,7 @@
       .replace(/ى/g, "ي")
       .replace(/\p{M}/gu, "")
       .replace(/[\u200B-\u200F\uFEFF]/g, "")
+      .replace(/[\u2010-\u2015\u2212\uFF0D]/g, "-")
       .replace(/[’‘`]/g, "'")
       .replace(/[_]+/g, " ")
       .replace(/[^\p{L}\p{N}#@.+:/-]+/gu, " ")
@@ -29,9 +30,17 @@
     };
   }
 
+  // Groups that are not literal phrase lists: regex frames and clause connectives.
+  const NON_PHRASE_GROUPS = new Set(["openingFrames", "negationConnectives"]);
   const compiledRules = Object.fromEntries(
-    Object.entries(rules).map(([key, phrases]) => [key, phrases.map(compilePhrase)])
+    Object.entries(rules).filter(([key]) => !NON_PHRASE_GROUPS.has(key)).map(([key, phrases]) => [key, phrases.map(compilePhrase)])
   );
+  const framePatterns = (rules.openingFrames || []).map((source) => new RegExp(source, "giu"));
+  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const connectiveSources = (rules.negationConnectives || []).map((value) => escapeRegExp(normalizeText(value))).filter(Boolean);
+  const connectivePattern = connectiveSources.length
+    ? new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${connectiveSources.join("|")})(?=$|[^\\p{L}\\p{N}])`, "gu")
+    : null;
   const knownHashtags = new Set((compiledRules.hiringHashtags || []).map((entry) => entry.phrase));
   const localPart = "[a-z0-9.!#$%&'*+/=?^_`{|}~-]+";
   const domainPart = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -50,8 +59,32 @@
     return occurrences.sort((a, b) => a.index - b.index || b.length - a.length);
   }
 
+  function findFrameOccurrences(normalizedText) {
+    const occurrences = [];
+    for (const pattern of framePatterns) {
+      for (const match of normalizedText.matchAll(pattern)) {
+        occurrences.push({ phrase: match[0].trim(), index: match.index, length: match[0].length });
+      }
+    }
+    return occurrences.sort((a, b) => a.index - b.index || b.length - a.length);
+  }
+
+  // A negation only governs its own clause. Commas are normalized away, so clause
+  // boundaries are recovered from connectives and the sentence punctuation that survives.
+  function clauseStart(prefix) {
+    let start = 0;
+    if (connectivePattern) {
+      connectivePattern.lastIndex = 0;
+      let match;
+      while ((match = connectivePattern.exec(prefix)) !== null) start = Math.max(start, match.index + match[0].length);
+    }
+    const sentence = Math.max(prefix.lastIndexOf("."), prefix.lastIndexOf("؛"), prefix.lastIndexOf("!"), prefix.lastIndexOf("?"));
+    return Math.max(start, sentence + 1);
+  }
+
   function isNegated(normalizedText, occurrence) {
-    const prefix = normalizedText.slice(Math.max(0, occurrence.index - 80), occurrence.index).trim();
+    const rawPrefix = normalizedText.slice(Math.max(0, occurrence.index - 80), occurrence.index).trim();
+    const prefix = rawPrefix.slice(clauseStart(rawPrefix));
     return negationAtEnd.test(prefix);
   }
 
@@ -98,6 +131,8 @@
   function classify(text, options = {}) {
     const normalized = normalizeText(text);
     const openingOccurrences = findOccurrences(normalized, "activeOpening");
+    const intakeOccurrences = findOccurrences(normalized, "ambiguousOpening");
+    const frameOccurrences = findFrameOccurrences(normalized);
     const regionalOccurrences = findOccurrences(normalized, "weakRegional");
     const recruiterSearchOccurrences = findOccurrences(normalized, "recruiterSearch");
     const recruiterTermOccurrences = findOccurrences(normalized, "recruiterTerms");
@@ -114,6 +149,8 @@
     const contactOccurrences = findOccurrences(normalized, "contactCues");
 
     const openingHits = unnegated(normalized, openingOccurrences);
+    const intakeHits = unnegated(normalized, intakeOccurrences);
+    const frameHits = unnegated(normalized, frameOccurrences);
     const regionalHits = unnegated(normalized, regionalOccurrences);
     const recruiterSearchHits = unnegated(normalized, recruiterSearchOccurrences);
     const recruiterTermHits = unnegated(normalized, recruiterTermOccurrences);
@@ -127,10 +164,20 @@
     const emailLink = hasEmailLink(options.hrefs || []);
     const jobLink = hasJobLink(options.hrefs || []);
 
+    // "فرصة عمل" contains "عمل"; a phrase must not corroborate itself.
+    const openingSpans = [...openingHits, ...intakeHits, ...frameHits];
+    const independentJobTermHits = jobTermHits.filter((occurrence) => !openingSpans.some((span) =>
+      occurrence.index < span.index + span.length && span.index < occurrence.index + occurrence.length));
+    const jobTermVariety = new Set(jobTermHits.map((occurrence) => occurrence.phrase)).size;
+    const employmentContext = independentJobTermHits.length > 0 || jobLink;
+    const frameOnly = frameHits.length > 0 && !openingHits.length && !intakeHits.length;
+
     const openScore =
-      (openingHits.length ? 4 : 0) +
+      (openingHits.length || frameHits.length ? 4 : 0) +
+      (intakeHits.length ? 2 : 0) +
       (regionalHits.length ? 1 : 0) +
-      (jobTermHits.length ? 1 : 0) +
+      (independentJobTermHits.length ? 1 : 0) +
+      (jobTermVariety >= 3 ? 1 : 0) +
       (applicationHits.length ? 2 : 0) +
       (email.kind === "full" ? 1 : email.kind === "partial" ? 0.5 : 0) +
       (emailLink ? 1 : 0) +
@@ -146,17 +193,26 @@
       (emailLink ? 1 : 0) +
       (jobLink ? 2 : 0);
 
-    const positiveContext = openingHits.length || recruiterSearchHits.length || recruiterTermHits.length ||
-      jobTermHits.length || jobLink || hashtagHits.length;
+    const positiveContext = openingHits.length || frameHits.length || intakeHits.length ||
+      recruiterSearchHits.length || recruiterTermHits.length || jobTermHits.length || jobLink || hashtagHits.length;
     let category = "none";
     let score = Math.max(openScore, recruiterScore);
     let confidence = "none";
 
-    if (closedOccurrences.length && !openingHits.length && !recruiterSearchHits.length) {
+    if (closedOccurrences.length && !openingHits.length && !frameHits.length && !intakeHits.length && !recruiterSearchHits.length) {
       category = "closed";
       confidence = "likely";
       score = 0;
-    } else if (openingHits.length && openScore >= 4) {
+    } else if (frameOnly && adviceHits.length) {
+      // A "Hiring:" headline about hiring itself is commentary, not a vacancy.
+      category = "hiring_discussion";
+      confidence = "likely";
+      score = Math.max(score, 2);
+    } else if ((openingHits.length || frameHits.length) && openScore >= 4) {
+      category = "open_role";
+      confidence = openScore >= 6 ? "strong" : "likely";
+    } else if (intakeHits.length && employmentContext && openScore >= 4) {
+      // Opening-shaped intake phrasing needs independent employment context to be an opening.
       category = "open_role";
       confidence = openScore >= 6 ? "strong" : "likely";
     } else if (recruiterSearchHits.length && recruiterScore >= 3) {
@@ -170,7 +226,7 @@
       category = "hiring_discussion";
       confidence = "likely";
       score = Math.max(score, 2);
-    } else if (positiveContext && (openScore >= 2 || recruiterScore >= 2 || hashtagHits.length)) {
+    } else if (positiveContext && (openScore >= 2 || recruiterScore >= 2 || hashtagHits.length || jobTermVariety >= 3)) {
       category = "possible";
       confidence = score >= 4 ? "review" : "low";
     }
@@ -180,6 +236,8 @@
       for (const occurrence of occurrences) evidence.push(`${label}: ${occurrence.phrase}@${occurrence.index}`);
     };
     addOccurrenceEvidence("Hiring phrase", openingHits);
+    addOccurrenceEvidence("Vacancy frame", frameHits);
+    addOccurrenceEvidence("Intake phrase", intakeHits);
     addOccurrenceEvidence("Regional colloquial signal", regionalHits);
     addOccurrenceEvidence("Recruiter search", recruiterSearchHits);
     addOccurrenceEvidence("Recruiting term", recruiterTermHits);
@@ -189,7 +247,11 @@
     addOccurrenceEvidence("Advice/news cue", adviceHits);
     addOccurrenceEvidence("Closed/negative cue", closedOccurrences);
     if (!openingHits.length && openingOccurrences.length) addOccurrenceEvidence("Negated hiring phrase", openingOccurrences);
+    if (!frameHits.length && frameOccurrences.length) addOccurrenceEvidence("Negated vacancy frame", frameOccurrences);
+    if (!intakeHits.length && intakeOccurrences.length) addOccurrenceEvidence("Negated intake phrase", intakeOccurrences);
     if (!recruiterSearchHits.length && recruiterSearchOccurrences.length) addOccurrenceEvidence("Negated recruiter search", recruiterSearchOccurrences);
+    if (!jobSeekerHits.length && jobSeekerOccurrences.length) addOccurrenceEvidence("Negated job-seeker cue", jobSeekerOccurrences);
+    if (!adviceHits.length && adviceOccurrences.length) addOccurrenceEvidence("Negated advice/news cue", adviceOccurrences);
     if (email.kind === "full") evidence.push("Email address");
     else if (email.kind === "partial") evidence.push("Email-like @domain");
     if (emailLink) evidence.push("Email link");
@@ -204,6 +266,8 @@
       evidence: [...new Set(evidence)],
       signals: {
         activeOpening: openingHits.length > 0,
+        ambiguousOpening: intakeHits.length > 0,
+        openingFrame: frameHits.length > 0,
         regional: regionalHits.length > 0,
         recruiterSearch: recruiterSearchHits.length > 0,
         recruiterTerms: recruiterTermHits.length > 0,

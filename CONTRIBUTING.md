@@ -9,9 +9,13 @@ Use Node.js 22 or newer and Python 3 for release packaging:
 ```sh
 npm ci
 npm test
+npm run probe:classifier -- --strict
+npm run probe:feed -- --strict
 bash scripts/verify-superpowers.sh
 node --test tests/integration/package.test.js
 ```
+
+`npm run probe:classifier` reports per-category precision and recall over the labeled corpus in `tests/fixtures/classifier/`; `npm run probe:feed` proves that one realistic LinkedIn card yields one post root, one archive record, and no page chrome in the extracted text. Both are measurement tools by default and gates with `--strict`; CI runs them strict. When you change a rule, a threshold, or root selection, run both and read the mismatch list before tuning anything else.
 
 The npm packages are development-only test tools. Do not add them to the extension runtime or manifest.
 
@@ -22,6 +26,19 @@ CHROME_PATH=/path/to/chrome npm run test:browser
 ```
 
 The browser suite uses synthetic intercepted HTTPS fixtures and requires no LinkedIn account. If no browser is installed it reports `NOT RUN`; never convert that result into a pass. CI sets `REQUIRE_CHROME=1` so a missing browser fails the required gate. Authenticated LinkedIn checks are a separate maintainer/release activity and must not use test credentials in the repository.
+
+## Popup layout preview
+
+jsdom performs no layout, so CSS changes are invisible to the test suite. To review them without loading the extension:
+
+```sh
+npm run preview:popup                        # http://localhost:4173
+PREVIEW_REF=<commit> npm run preview:popup    # compare against another stylesheet
+```
+
+The preview serves the real `popup.html` and `popup.css` inside an 800×600 frame — Chrome's hard popup ceiling — driven by a synthetic `chrome.*` stub (`scripts/preview-stub.js`) with in-memory records. It never contacts LinkedIn and is not part of the packaged extension. The **Before this change** link renders the stylesheet at `PREVIEW_REF` (default `60ab86a`, the commit before the popup was enlarged) so a layout change can be A/B'd in one click.
+
+Keep the popup within 800×600: Chrome clamps anything larger, so extra width or height silently becomes a scrollbar. `tests/dom/accessibility.test.js` still enforces the stylesheet's text-level invariants — no font below 12px, a single `html, body` rule, `:focus-visible`, `prefers-reduced-motion: reduce`, the `[dir="rtl"]` rules, and `overflow-wrap: anywhere` — and the contrast pairs come from the `:root` colour tokens.
 
 ## Making changes
 

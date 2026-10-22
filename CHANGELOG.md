@@ -13,7 +13,11 @@ All notable changes to Linkerter are documented here. Versions follow [Semantic 
 - Schema-v2 JSON/CSV exports, field selection, sanitized diagnostic downloads, and distinct history/all-data deletion controls.
 - Local EN/FR/AR popup dictionaries, Arabic RTL, responsible-use onboarding, keyboard tabs, reduced motion, and accessible reflow/focus styling.
 - Real-Chrome MV3 integration harness with sanitized intercepted HTTPS fixtures, concurrent-tab/storage/reload/download/keyboard scenarios, and an explicit unavailable-browser gate.
+- 65-case adversarial EN/FR/AR corpus (`tests/fixtures/classifier/adversarial.json`) covering real vacancy formats, opening-shaped lookalikes, negation, mixed clauses, recruiter searches, job seekers, advice, and closed posts.
+- `npm run probe:classifier` reports per-category precision/recall and `open_role` false positives; `npm run probe:feed` proves one realistic card yields one post root, one archive record, and chrome-free text. Both gate with `--strict` and run strict in CI.
+- Post age and an explicit “older than 60 days, may no longer be active” marker reach the result list, so a months-old reshared opening is visibly separated from a current one.
 - Branded 16/48/128 PNG icons, privacy/support/security/contribution documentation, store drafts, deterministic unpacked/store packagers, and CI.
+- `npm run preview:popup` serves the real popup inside an 800×600 frame — Chrome's hard popup ceiling — with a synthetic `chrome.*` stub and in-memory records, plus a **Before this change** link that renders the previous stylesheet for A/B comparison (`scripts/preview-popup.cjs`, `scripts/preview-stub.js`). Development-only: it is never packaged and never contacts LinkedIn.
 
 ### Changed
 
@@ -23,9 +27,21 @@ All notable changes to Linkerter are documented here. Versions follow [Semantic 
 - Canonicalized LinkedIn identity/URLs and retained complete text when merging newer partial observations.
 - Preserved result focus/selection across identical refreshes and separated independent scroll/monitor command generations.
 - Renamed user-facing modes to Adaptive naming and documented hidden-tab throttling and DOM-compatibility limitations.
+- Result order now defaults to **Active openings first** (openings, then recruiter searches, possible matches, job seekers, advice, closed — freshest post first inside each category) while **Newest first** and **Oldest first** stay purely chronological. No category is hidden and no classifier signal changed.
+- Removed the **Partial text** result filter. Partial-only records are deliberately never archived, so that option could only ever render an empty list; partial content is still flagged on the records that are archived.
+- The popup now uses Chrome's real popup ceiling instead of a narrow column: 780px wide with a 560–600px body, a larger type scale (15px base, 13px minimum, headings 22/18/16), 44px-tall controls, and roomier panels. Above 720px the extra width is spent on columns rather than stretched: the scroll status and actions span the width with the pace and limits panels side by side, Start sits beside Pause/Stop, detection controls sit beside results, search and result order share a row, metrics go 2×2, and export fields go three-up. Below 720px the single-column flow and the 360px reflow are unchanged, and the accessibility invariants (focus-visible, reduced motion, RTL, contrast tokens) are untouched.
+- Post-root selection now treats only card-level elements as cards. `feed-shared-update-v2__description-wrapper`, `__content`, `__actor`, and `__social-actions` are parts of a card, not cards, and a nested card is a separate post only when it carries its own distinct post URN (a reshare).
 
 ### Fixed
 
+- One real LinkedIn post no longer produces several archive records. Nested card children used to become independent post roots with `text:` identities while the card kept its `urn:` identity, so a single post could appear three times, inflate `counts.open_role` and the results total, burn the export-archive limit, and report contradictory complete/partial labels.
+- Page chrome no longer enters post text: see-more/see-less and comment control labels, and — in card-level fallback — actor, timestamp, action row, and control-menu text are excluded from the text that is classified, deduplicated, displayed, and exported.
+- Opening-shaped intake phrasing (`applications are open`, `join our team`, `our team is growing`, `come work with us`, `referrals welcome`, `candidatures ouvertes`, `التقديم مفتوح`, `فرصة عمل`) no longer reaches **Openings** on its own, which removed programme, webinar, grant, entrance-exam, volunteering, and employer-praise false positives. It needs independent employment wording or a job/careers link, and otherwise stays in **Possible matches**.
+- Added structural vacancy frames instead of title families: `Hiring: <title>` / `Hiring - <title>` headlines and the Arabic `مطلوب … للعمل|للانضمام|في` frame, plus `je recrute` and `nous sommes à la recherche`. These recovered common EN/FR/AR vacancies that were previously reported as no signal at all.
+- A phrase can no longer corroborate itself: employment wording counted as context must be independent of the matched opening phrase (`فرصة عمل` contains `عمل`).
+- Negation is scoped to its own clause. Because commas normalize to spaces, a negation used to suppress any genuine cue within four words — “I am not hiring, but here are hiring tips …” was reported as no signal with empty evidence, and an Arabic “we are not hiring, but applications are open …” was reported as closed. Connectives and sentence boundaries now end the negation’s scope.
+- Suppressed job-seeker, advice/news, intake, and vacancy-frame signals are now reported as `Negated …` evidence entries, so a “No hiring signal” result stays explainable instead of silently discarding what matched.
+- `نبحث عن مرشحين` moved from active-opening to recruiter-search phrasing, so an Arabic candidate search is no longer reported as an opening by the same words.
 - Negated and mixed-polarity hiring phrases no longer become positive openings without independent positive evidence.
 - CSV exports neutralize spreadsheet-formula-leading untrusted cells.
 - Concurrent history updates are serialized instead of overwriting another tab’s records.

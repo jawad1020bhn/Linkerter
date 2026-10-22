@@ -74,6 +74,14 @@
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // Result ordering and age policy. Ranks keep active openings ahead of every secondary
+  // category without hiding any of them.
+  const SORT_MODES = ["relevance", "newest", "oldest"];
+  const CATEGORY_RANK = Object.freeze({
+    open_role: 0, recruiter_search: 1, possible: 2, job_seeker: 3, hiring_discussion: 4, closed: 5, partial: 6
+  });
+  const STALE_OPENING_AGE_DAYS = 60;
+
   function isFeedPage() {
     return location.hostname === "www.linkedin.com" &&
       (location.pathname === "/" || /^\/feed(?:\/|$)/.test(location.pathname));
@@ -115,6 +123,16 @@
     return buttonCount >= 1 && linkCount >= 2;
   }
 
+  // Card-level classes only. `feed-shared-update-v2` is a card, but its BEM children
+  // (`__description-wrapper`, `__content`, `__actor`, `__social-actions`) are parts of that
+  // card. Treating them as cards made one post produce several roots, several archive
+  // records, and inflated category counts.
+  function isCardClassToken(token) {
+    if (!token || token.includes("__")) return false;
+    return token === "feed-shared-update-v2" || token === "occludable-update" ||
+      /feed[-\w]*(?:update|post)|(?:post|update)[-\w]*card|card[-\w]*(?:post|update)/.test(token);
+  }
+
   function isLikelyPostRoot(element) {
     if (!element || element === document.body || element === document.documentElement) return false;
     const className = typeof element.className === "string" ? element.className.toLowerCase() : "";
@@ -123,7 +141,7 @@
     const dataId = element.getAttribute("data-id") || "";
     const testId = (element.getAttribute("data-test-id") || "").toLowerCase();
     const viewName = (element.getAttribute("data-view-name") || "").toLowerCase();
-    const knownCardClass = /feed-shared-update-v2|occludable-update|feed[-\w]*(?:update|post)|(?:post|update)[-\w]*card|card[-\w]*(?:post|update)/.test(className);
+    const knownCardClass = className.split(/\s+/).some(isCardClassToken);
     const postUrn = /urn:li:(activity|share|ugcpost):/i.test(urn) || /urn:li:(activity|share|ugcpost):/i.test(dataId);
     const feedView = /feed.*(update|post)|(update|post).*feed/.test(viewName);
     const feedTestId = /feed.*(update|post)|(update|post).*feed/.test(testId);
@@ -152,7 +170,42 @@
       const root = findPostRoot(candidate);
       if (root && scope.contains(root)) roots.add(root);
     }
-    return Array.from(roots);
+    return deduplicateNestedRoots(Array.from(roots));
+  }
+
+  function postIdentityOf(element) {
+    if (!element || typeof element.getAttribute !== "function") return "";
+    const value = `${element.getAttribute("data-urn") || ""} ${element.getAttribute("data-id") || ""}`;
+    const match = value.match(/urn:li:(?:activity|share|ugcpost):[^\s"']+/i);
+    return match ? match[0] : "";
+  }
+
+  // One post must never be archived twice. A nested element that looks like a card is part of
+  // the enclosing card unless it carries its own distinct post identity — which is exactly how
+  // a reshare appears inside the post that shares it.
+  function deduplicateNestedRoots(roots) {
+    const kept = [];
+    for (const root of roots) {
+      const ownerIndex = kept.findIndex((other) => other !== root && other.contains(root));
+      if (ownerIndex < 0) {
+        kept.push(root);
+        continue;
+      }
+      const identity = postIdentityOf(root);
+      const ownerIdentity = postIdentityOf(kept[ownerIndex]);
+      // No identity of its own: it is part of the enclosing card, so it must not be archived.
+      if (!identity) continue;
+      // A different identity is a reshare inside the post that shares it: both are real posts.
+      if (ownerIdentity && ownerIdentity !== identity) {
+        kept.push(root);
+        continue;
+      }
+      // The same identity (or an ancestor without one) means this is the card itself and the
+      // ancestor is only a wrapper. Prefer the innermost card so body, see-more, and permalink
+      // selection stay scoped to it.
+      kept[ownerIndex] = root;
+    }
+    return kept;
   }
 
   function collectPostRoots() {
@@ -224,17 +277,57 @@
       .trim();
   }
 
+  const CONTROL_LABELS = /see more|show more|see less|show less|more comments|voir plus|voir moins|afficher plus|afficher moins|commentaires|عرض المزيد|عرض اقل|إظهار المزيد|اظهار اقل|مزيد من التعليقات|mehr anzeigen|ver mais|mostrar mais|vedi altro|mostra altro|meer weergeven|daha fazla goster/iu;
+
+  function isControlChrome(element, body) {
+    if (!element || (body && !body.contains(element))) return false;
+    if (isSeeMoreControl(element, body)) return true;
+    const label = normalizeLabel(element);
+    return Boolean(label) && CONTROL_LABELS.test(label);
+  }
+
+  function collectChromeNodes(root, body) {
+    const nodes = [];
+    const push = (list) => {
+      for (const node of list) if (node && body.contains(node) && !nodes.includes(node)) nodes.push(node);
+    };
+    // Expansion and comment controls are page furniture, never post text.
+    push(Array.from(body.querySelectorAll("button,[role='button']")).filter((element) => isControlChrome(element, body)));
+    if (body === root) {
+      // Card-level fallback: keep the post body only, never the actor, timestamp, action row,
+      // control menu, or comment chrome.
+      push(Array.from(body.querySelectorAll(
+        "time,[datetime],[class*='actor'],[class*='social-actions'],[class*='control-menu'],[class*='sub-description'],[class*='timestamp'],[class*='comment']"
+      )));
+    }
+    return nodes;
+  }
+
+  function nodeText(node) {
+    if (typeof node.innerText === "string") return node.innerText;
+    const visibleClone = node.cloneNode(true);
+    visibleClone.querySelectorAll("[hidden],[aria-hidden='true'],.visually-hidden").forEach((element) => element.remove());
+    return visibleClone.textContent || "";
+  }
+
+  // Control labels and card chrome must not enter the text that is classified, deduplicated,
+  // displayed, and exported. Removing their own text keeps innerText semantics in Chrome while
+  // staying deterministic in tests.
+  function stripChromeText(text, chromeNodes) {
+    let result = text;
+    for (const node of chromeNodes) {
+      const chunk = cleanText(nodeText(node));
+      if (!chunk) continue;
+      const index = result.lastIndexOf(chunk);
+      if (index >= 0) result = `${result.slice(0, index)} ${result.slice(index + chunk.length)}`;
+    }
+    return cleanText(result);
+  }
+
   function getPostTextDetails(root) {
     const body = findBodyNode(root);
     const control = findSeeMore(root, body);
-    let fallbackText = "";
-    if (typeof body.innerText === "string") fallbackText = body.innerText;
-    else {
-      const visibleClone = body.cloneNode(true);
-      visibleClone.querySelectorAll("[hidden],[aria-hidden='true'],.visually-hidden").forEach((node) => node.remove());
-      fallbackText = visibleClone.textContent || "";
-    }
-    const text = cleanText(fallbackText || body.textContent || "");
+    const text = stripChromeText(cleanText(nodeText(body) || body.textContent || ""), collectChromeNodes(root, body));
     const fullTextAvailableWithoutExpansion = !control && body !== root;
     return {
       text,
@@ -252,7 +345,19 @@
   function getStableId(root) {
     const urn = root.getAttribute("data-urn");
     const id = root.getAttribute("data-id");
-    return String(urn || id || "").slice(0, 100);
+    const direct = String(urn || id || "").slice(0, 100);
+    if (direct) return direct;
+    // A body node that reached this point must not fork into a separate text identity for the
+    // post it belongs to; inherit the enclosing card's post identity instead.
+    let current = root.parentElement;
+    let depth = 0;
+    while (current && current !== document.body && depth < 12) {
+      const inherited = postIdentityOf(current);
+      if (inherited) return inherited.slice(0, 100);
+      current = current.parentElement;
+      depth += 1;
+    }
+    return "";
   }
 
   const GENERIC_TITLE_LABELS = new Set([
@@ -971,6 +1076,23 @@
     }
   }
 
+  // An opening the page reports as months old may no longer be an active vacancy. Age is only
+  // used when the DOM exposed it; nothing is guessed when it did not.
+  function isStaleOpening(record) {
+    if (!record || record.category !== "open_role") return false;
+    const days = Number(record.postAge?.ageDaysApprox);
+    return Number.isFinite(days) && days > STALE_OPENING_AGE_DAYS;
+  }
+
+  function summarizePostAge(postAge) {
+    if (!postAge || typeof postAge !== "object") return null;
+    const days = Number(postAge.ageDaysApprox);
+    const label = postAge.label || null;
+    const publishedAt = postAge.publishedAt || null;
+    if (!label && !publishedAt && !Number.isFinite(days)) return null;
+    return { label, publishedAt, ageDaysApprox: Number.isFinite(days) ? days : null };
+  }
+
   function summarizeRecord(record) {
     return {
       id: record.id,
@@ -985,7 +1107,9 @@
       lastSeenAt: record.lastSeenAt,
       contentComplete: record.contentComplete !== false,
       extractionStatus: record.extractionStatus || (record.contentComplete === false ? "partial" : "complete"),
-      metrics: record.metrics || null
+      metrics: record.metrics || null,
+      postAge: summarizePostAge(record.postAge),
+      stale: isStaleOpening(record)
     };
   }
 
@@ -1001,10 +1125,24 @@
       ].join(" "));
       return haystack.includes(search);
     });
-    const direction = query.sort === "oldest" ? 1 : -1;
+    // "relevance" is the default view: active openings first, then the remaining categories in
+    // review order, freshest post first inside a category. Chronological sorts stay chronological
+    // so an explicit user choice is honoured exactly.
+    const sort = SORT_MODES.includes(query.sort) ? query.sort : "relevance";
+    const direction = sort === "oldest" ? 1 : -1;
     filtered.sort((a, b) => {
       const aTime = Date.parse(a.lastSeenAt || a.firstSeenAt || "") || 0;
       const bTime = Date.parse(b.lastSeenAt || b.firstSeenAt || "") || 0;
+      if (sort === "relevance") {
+        const rank = (CATEGORY_RANK[a.category] ?? 99) - (CATEGORY_RANK[b.category] ?? 99);
+        if (rank) return rank;
+        const staleness = Number(isStaleOpening(a)) - Number(isStaleOpening(b));
+        if (staleness) return staleness;
+        const aAge = Number(a.postAge?.ageDaysApprox);
+        const bAge = Number(b.postAge?.ageDaysApprox);
+        if (Number.isFinite(aAge) && Number.isFinite(bAge) && aAge !== bAge) return aAge - bAge;
+        return (bTime - aTime) || String(a.id).localeCompare(String(b.id));
+      }
       return direction * (aTime - bTime) || String(a.id).localeCompare(String(b.id));
     });
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 25));
@@ -1157,6 +1295,10 @@
 
   const monitorApi = {
     isSeeMoreControl,
+    isLikelyPostRoot,
+    findPostRootsInScope,
+    collectPostRoots,
+    getStableId,
     getPostTextDetails,
     extractPostRecord,
     expandPost,

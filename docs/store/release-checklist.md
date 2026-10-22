@@ -9,6 +9,8 @@ Run from a clean checkout with Node 22+ and Python 3:
 ```sh
 npm ci
 npm test
+npm run probe:classifier -- --strict
+npm run probe:feed -- --strict
 bash scripts/verify-superpowers.sh
 node --test tests/integration/package.test.js
 bash scripts/package-extension.sh --unpacked /tmp/linkerter-unpacked-a.zip
@@ -21,6 +23,7 @@ git diff --check
 ```
 
 - [ ] All commands pass in the release environment.
+- [ ] `probe:classifier --strict` reports per-category precision and recall with no `open_role` false positive, and `probe:feed --strict` reports `probe verdict: clean` (one realistic card → one post root → one archive record, no page chrome in extracted text).
 - [ ] Both archives contain only the exact runtime allowlist; unpacked is directory-wrapped and store has `manifest.json` at ZIP root.
 - [ ] CI passes, including `REQUIRE_CHROME=1 npm run test:browser`.
 - [ ] The final audited commit and ZIP SHA-256 hashes are recorded by the release owner.
@@ -28,6 +31,7 @@ git diff --check
 ## Browser and live-site gates
 
 - **NOT RUN in the original authoring sandbox — real Chrome MV3 integration:** no Chrome/Chromium executable was available on 2026-10-22. The harness exists and reports this condition explicitly; it must pass in CI or another controlled Chrome environment before release.
+- `tests/fixtures/browser-feed.html` is shaped like a current LinkedIn card (an `occludable-update` wrapper around the `article` card, with real `feed-shared-update-v2__*` children), so the browser gate also covers post-root deduplication and chrome-free text extraction. Simplified markup cannot: against the pre-fix monitor this fixture yields 7 roots and 2 archive records for one post, which fails the suite's exact one-record-per-tab assertions. It is also the only place the Chrome `innerText` text path is exercised — jsdom has no `innerText`, so Node tests cover the cloned-node path only.
 - **NOT RUN — authenticated LinkedIn validation:** no credentials or live member data were used. Validate current English, French, and Arabic DOMs; extraction/expansion; two concurrent feed tabs; scrolling in hidden tabs; stop/reload cleanup; and downloads without auto-resume.
 - **NOT RUN — real screen-reader, zoom, focus, color-rendering, and popup-window review:** jsdom/axe and static CSS checks do not replace these checks.
 - [ ] Sanitized real-browser evidence and screenshots are reviewed. Do not fabricate screenshots or use private member content.

@@ -3,6 +3,12 @@
 
   // Keyword groups intentionally exclude job-title families. They are signals,
   // not a guarantee that a post contains an active vacancy.
+  //
+  // `activeOpening` holds unambiguous hiring predicates: a single hit is enough to
+  // call a post an opening. `ambiguousOpening` holds opening-shaped phrases that
+  // programmes, events, grants, volunteering, and employer praise also use, so they
+  // only reach `open_role` together with independent employment context and
+  // otherwise stay in the `possible` review bucket.
   globalThis.__LI_FEED_HIRING_RULES__ = {
     activeOpening: [
       // English
@@ -11,25 +17,55 @@
       "we're recruiting", "we are recruiting", "currently recruiting", "we're looking to hire",
       "we are looking to hire", "we have an opening", "we have openings", "open role", "open roles",
       "open position", "open positions", "job opening", "job openings", "position available",
-      "positions available", "role available", "roles available", "join our team", "come work with us",
-      "our team is growing", "applications are open", "applications now open", "referrals welcome",
-      "we're expanding our team", "we are expanding our team", "hiring for", "vacancy available",
+      "positions available", "role available", "roles available",
+      "hiring for", "vacancy available",
       // French
       "nous recrutons", "on recrute", "nous embauchons", "on embauche", "recrutement en cours",
       "nous recherchons des candidats", "nous recherchons", "on recherche", "poste à pourvoir",
       "postes à pourvoir", "poste vacant", "postes vacants", "offre d'emploi", "offres d'emploi",
-      "plusieurs postes ouverts", "poste ouvert", "postes ouverts", "rejoignez notre équipe",
-      "rejoignez-nous", "intégrer notre équipe", "notre équipe s'agrandit", "candidatures ouvertes",
-      "nous acceptons les candidatures", "recrutement urgent", "profil recherché", "profils recherchés",
+      "plusieurs postes ouverts", "poste ouvert", "postes ouverts",
+      "je recrute", "nous sommes à la recherche", "recrutement urgent", "profil recherché", "profils recherchés",
       "nous cherchons des candidats", "nous avons des postes", "poste à combler", "postes à combler",
       // Arabic
       "نحن نوظف", "نحن بصدد التوظيف", "نقوم بالتوظيف", "إعلان توظيف", "نبحث عن موظف",
-      "نبحث عن موظفين", "نبحث عن مرشح", "نبحث عن مرشحين", "مطلوب للعمل", "مطلوب موظف",
-      "مطلوب موظفين", "مطلوبة للعمل", "فرصة عمل", "فرص عمل", "وظيفة شاغرة", "وظائف شاغرة",
-      "منصب شاغر", "مناصب شاغرة", "انضم إلى فريقنا", "انضمي إلى فريقنا", "انضموا إلى فريقنا",
-      "التقديم مفتوح", "باب التقديم مفتوح", "نستقبل طلبات التوظيف", "التوظيف مستمر", "توظيف فوري",
+      "نبحث عن موظفين", "مطلوب للعمل", "مطلوب موظف",
+      "مطلوب موظفين", "مطلوبة للعمل", "وظيفة شاغرة", "وظائف شاغرة",
+      "منصب شاغر", "مناصب شاغرة", "نستقبل طلبات التوظيف", "التوظيف مستمر", "توظيف فوري",
       "توظيف عاجل", "نحتاج إلى موظف", "نحتاج إلى موظفين", "أرسل سيرتك الذاتية", "أرسلوا السيرة الذاتية",
-      "للتقديم يرجى", "للتقديم أرسل", "فرصة تدريب", "تدريب متاح",
+      "للتقديم يرجى", "للتقديم أرسل",
+    ],
+
+    // Opening-shaped intake phrasing shared with programme, event, grant, volunteering,
+    // and employer-praise posts. These need independent employment context before they
+    // may be reported as an active opening.
+    ambiguousOpening: [
+      // English
+      "join our team", "come work with us", "our team is growing", "applications are open",
+      "applications now open", "referrals welcome", "we're expanding our team", "we are expanding our team",
+      // French
+      "rejoignez notre équipe", "rejoignez-nous", "intégrer notre équipe", "notre équipe s'agrandit",
+      "candidatures ouvertes", "nous acceptons les candidatures",
+      // Arabic
+      "انضم إلى فريقنا", "انضمي إلى فريقنا", "انضموا إلى فريقنا", "التقديم مفتوح", "باب التقديم مفتوح",
+      "فرصة عمل", "فرص عمل", "فرصة تدريب", "تدريب متاح"
+    ],
+
+    // Grammatical vacancy frames rather than occupational title families. Each frame is a
+    // regex source applied to normalized text and must stay language-structural: it describes
+    // how a vacancy sentence is built, never which job titles exist.
+    openingFrames: [
+      // "Hiring: <title>" / "Hiring - <title>" as a post headline.
+      "(?:^|\\.\\s)hiring\\s*[:\\-]\\s*\\S",
+      // "مطلوب <one to three words> للعمل|للانضمام|في …" — the common Arabic vacancy frame.
+      "مطلوب(?:\\s+\\S+){1,3}\\s+(?:للعمل|للانضمام|في)"
+    ],
+
+    // Clause connectives that end a negation's scope. Without them a negation in one clause
+    // suppresses a genuine signal in the next ("we are not hiring, but …").
+    negationConnectives: [
+      "but", "however", "though", "although", "yet", "whereas",
+      "mais", "cependant", "toutefois", "par contre", "pourtant",
+      "لكن", "ولكن", "بل", "الا ان", "غير ان"
     ],
 
     // Optional Algerian dialect / Arabizi spellings are deliberately weak and noisy signals.
@@ -102,6 +138,7 @@
     adviceNews: [
       "hiring tips", "tips for hiring", "how to hire", "how we hire", "hiring strategy", "recruitment trends",
       "interview advice", "interview tips", "hiring process", "recruitment process", "what i look for when hiring",
+      "look for when hiring", "interviewing", "what i learned", "lessons learned",
       "lessons from hiring", "hiring news", "hiring market", "future of hiring", "recruitment insights",
       "conseils de recrutement", "comment recruter", "stratégie de recrutement", "tendances du recrutement",
       "conseils d'entretien", "processus de recrutement", "actualités rh", "marché du recrutement",

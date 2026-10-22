@@ -24,6 +24,10 @@ jobs:
         run: npm ci
       - name: Run unit, integration, DOM, and release tests
         run: npm test
+      - name: Measure classifier accuracy and feed-root deduplication
+        run: |
+          npm run probe:classifier -- --strict
+          npm run probe:feed -- --strict
       - name: Verify Superpowers and runtime integrity
         run: bash scripts/verify-superpowers.sh
       - name: Verify release archives independently
