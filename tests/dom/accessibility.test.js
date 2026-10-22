@@ -44,8 +44,10 @@ test("tabs use roving tabindex and Arrow/Home/End keyboard navigation", async ()
     await popup.ready;
     const scroll = popup.document.querySelector("#scrollTab");
     const hiring = popup.document.querySelector("#hiringTab");
+    const settings = popup.document.querySelector("#settingsTab");
     assert.equal(scroll.tabIndex, 0);
     assert.equal(hiring.tabIndex, -1);
+    assert.equal(settings.tabIndex, -1);
     scroll.focus();
     scroll.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     assert.equal(popup.document.activeElement, hiring);
@@ -56,6 +58,9 @@ test("tabs use roving tabindex and Arrow/Home/End keyboard navigation", async ()
     hiring.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     assert.equal(popup.document.activeElement, scroll);
     scroll.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    assert.equal(popup.document.activeElement, settings);
+    assert.equal(popup.document.querySelector("#settingsView").hidden, false);
+    settings.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     assert.equal(popup.document.activeElement, hiring);
     hiring.dispatchEvent(new popup.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     assert.equal(popup.document.activeElement, scroll);

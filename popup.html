@@ -27,15 +27,6 @@
       <p data-i18n="onboarding.policy">Use responsibly and follow LinkedIn’s applicable terms. Review detections before acting on them.</p>
       <button id="onboardingDismiss" class="button button-secondary" type="button" data-i18n="onboarding.dismiss">Got it</button>
     </section>
-    <div class="locale-row">
-      <label class="field-label" for="localeSelect" data-i18n="locale.label">Language</label>
-      <select id="localeSelect" class="select-control">
-        <option value="auto" data-i18n="locale.auto">Automatic</option>
-        <option value="en" data-i18n="locale.en">English</option>
-        <option value="fr" data-i18n="locale.fr">Français</option>
-        <option value="ar" data-i18n="locale.ar">العربية</option>
-      </select>
-    </div>
 
     <section class="target-card" aria-label="Monitored LinkedIn tab" data-i18n-aria-label="target.section">
       <div class="target-heading">
@@ -51,10 +42,12 @@
     <nav class="tabs" role="tablist" aria-label="Extension sections" data-i18n-aria-label="tabs.section">
       <button id="scrollTab" class="tab active" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="scrollView" data-i18n="tabs.scroll">Scroll</button>
       <button id="hiringTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="hiringView"><span data-i18n="tabs.hiring">Hiring filter</span> <span id="tabMatchCount" class="tab-count">0</span></button>
+      <button id="settingsTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="settingsView" data-i18n="tabs.settings">Settings</button>
     </nav>
 
     <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed to begin.</p>
 
+    <!-- SCROLL: minimal — status + actions only, config lives in Settings -->
     <section id="scrollView" class="view active" role="tabpanel" aria-labelledby="scrollTab">
       <section class="status-card">
         <div class="status-heading">
@@ -78,63 +71,14 @@
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="paceTitle">
-        <div class="panel-heading">
-          <div>
-            <p class="section-kicker" data-i18n="pace.kicker">ADAPTIVE SCROLL</p>
-            <h2 id="paceTitle" data-i18n="pace.title">Smart pacing</h2>
-          </div>
-          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">AUTO-ADAPTIVE</span>
-        </div>
-
-        <label class="field-label" for="modeSelect" data-i18n="pace.modeLabel">Adaptive mode</label>
-        <select id="modeSelect" class="select-control">
-          <option value="standard" data-i18n="mode.standard">Adaptive Standard</option>
-          <option value="fast" data-i18n="mode.fast">Adaptive Fast</option>
-          <option value="super_fast" data-i18n="mode.super_fast">Adaptive Super Fast</option>
-        </select>
-        <p id="modeDescription" class="field-help" data-i18n="pace.description">Adaptive movement and pauses are automatic. The selected feed keeps scrolling in the background; Chrome may throttle hidden tabs.</p>
-      </section>
-
-      <section class="panel" aria-labelledby="limitsTitle">
-        <div class="panel-heading compact-heading">
-          <div>
-            <p class="section-kicker" data-i18n="limits.kicker">SESSION GUARDRAILS</p>
-            <h2 id="limitsTitle" data-i18n="limits.title">Limits &amp; safeguards</h2>
-          </div>
-        </div>
-        <div class="two-fields">
-          <div>
-            <label class="field-label" for="maxMinutes" data-i18n="limits.time">Time limit</label>
-            <select id="maxMinutes" class="select-control">
-              <option value="5" data-i18n="time.minutes" data-i18n-count="5">5 minutes</option>
-              <option value="15" selected="" data-i18n="time.minutes" data-i18n-count="15">15 minutes</option>
-              <option value="30" data-i18n="time.minutes" data-i18n-count="30">30 minutes</option>
-              <option value="60" data-i18n="time.minutes" data-i18n-count="60">60 minutes</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label" for="maxSteps" data-i18n="limits.steps">Step limit</label>
-            <select id="maxSteps" class="select-control">
-              <option value="40" data-i18n="steps.count" data-i18n-count="40">40 steps</option>
-              <option value="80" data-i18n="steps.count" data-i18n-count="80">80 steps</option>
-              <option value="120" data-i18n="steps.count" data-i18n-count="120">120 steps</option>
-              <option value="180" selected="" data-i18n="steps.count" data-i18n-count="180">180 steps</option>
-              <option value="300" data-i18n="steps.count" data-i18n-count="300">300 steps</option>
-              <option value="500" data-i18n="steps.count" data-i18n-count="500">500 steps</option>
-            </select>
-          </div>
-        </div>
-        <div class="toggle-list">
-          <label class="toggle-row" for="pauseOnInput">
-            <span><strong data-i18n="limits.pauseInput">Pause on my input</strong><small data-i18n="limits.pauseInputHelp">Pause when you use the page.</small></span>
-            <input id="pauseOnInput" type="checkbox" checked="">
-            <span class="switch" aria-hidden="true"></span>
-          </label>
-        </div>
-      </section>
+      <div class="view-hint">
+        <span class="view-hint-icon" aria-hidden="true">⚙</span>
+        <span data-i18n="scroll.hint">Pace, time and step limits are in Settings. Change them there and start again.</span>
+        <button class="link-button" type="button" data-view-jump="settings" data-i18n="scroll.goSettings">Open Settings</button>
+      </div>
     </section>
 
+    <!-- HIRING: monitor + metrics + results only -->
     <section id="hiringView" class="view" role="tabpanel" aria-labelledby="hiringTab" hidden="">
       <section class="panel detector-panel">
         <div class="panel-heading">
@@ -145,38 +89,9 @@
           <span class="local-badge" data-i18n="detector.badge">NO AI</span>
         </div>
         <p class="detector-copy" data-i18n="detector.copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French, and Arabic while it is in the background. Chrome may throttle hidden tabs, and the feed tab must stay open.</p>
-        <label class="toggle-row auto-expand-row" for="autoExpand">
-          <span><strong data-i18n="detector.autoExpand">Auto-expand visible long posts</strong><small data-i18n="detector.autoExpandHelp">Only while the hiring monitor is running.</small></span>
-          <input id="autoExpand" type="checkbox" checked="">
-          <span class="switch" aria-hidden="true"></span>
-        </label>
         <button id="monitorBtn" class="button button-monitor" type="button" disabled="" data-i18n="monitor.start">Start hiring monitor</button>
         <p id="monitorStatus" class="monitor-status" role="status" data-i18n="monitor.off">Monitor is off.</p>
         <p id="domHealthStatus" class="dom-health" role="status" data-i18n="monitor.domPending">Feed DOM check pending.</p>
-        <div class="history-controls">
-          <label class="field-label" for="historyMode" data-i18n="history.label">Save new post history</label>
-          <select id="historyMode" class="select-control">
-            <option value="off" data-i18n="history.off">Off — do not save new posts</option>
-            <option value="session" data-i18n="history.session">Browser session only</option>
-            <option value="persistent" data-i18n="history.persistent">Persistent on this device</option>
-          </select>
-          <input id="keepHistory" type="checkbox" hidden="">
-          <p class="field-help" data-i18n="history.help">Off by default. Changing mode never copies old records; exports can read both stores.</p>
-          <div class="history-actions">
-            <label class="field-label" for="historyRetention" data-i18n="history.retention">Retention</label>
-            <select id="historyRetention" class="select-control">
-              <option value="7" data-i18n="history.days" data-i18n-count="7">7 days</option>
-              <option value="30" selected="" data-i18n="history.days" data-i18n-count="30">30 days</option>
-              <option value="90" data-i18n="history.days" data-i18n-count="90">90 days</option>
-            </select>
-            <button id="clearHistoryBtn" class="button button-secondary clear-history-btn" type="button" disabled="" data-i18n="history.clear">Clear saved history</button>
-          </div>
-          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Local history is off.</p>
-        </div>
-        <div class="history-actions">
-          <button id="clearAllDataBtn" class="button button-secondary" type="button" data-i18n="history.clearAll">Clear all local data</button>
-          <button id="diagnosticBtn" class="button button-secondary" type="button" data-i18n="history.diagnostic">Download sanitized diagnostic</button>
-        </div>
         <div class="metric-grid" aria-label="Detected post counts" data-i18n-aria-label="metrics.aria">
           <div class="metric"><strong id="openCount">0</strong><span data-i18n="category.open_role">Openings</span></div>
           <div class="metric"><strong id="recruiterCount">0</strong><span data-i18n="category.recruiter_search">Recruiter searches</span></div>
@@ -219,6 +134,147 @@
           <span id="pageStatus" role="status">Page 1</span>
           <button id="nextPage" class="button button-secondary" type="button" disabled="" data-i18n="results.next">Next</button>
         </div>
+        <!-- export options moved to Settings; hiring view only shows summary -->
+        <p id="processedDetail" class="processed-detail" data-i18n="results.processedInitial">Start the monitor to scan posts as you browse.</p>
+        <p id="exportStatus" class="export-status" data-i18n="export.initial">User-initiated local JSON or CSV. Choose fields and optionally export only the selected category.</p>
+        <div id="matchList" class="match-list">
+          <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">⌕</span>
+            <strong data-i18n="results.emptyTitle">No posts scanned yet</strong>
+            <span data-i18n="results.emptyDetail">Start the monitor to detect likely hiring posts.</span>
+          </div>
+        </div>
+        <section id="postDetail" class="post-detail" aria-label="Full post details" hidden="" data-i18n-aria-label="results.details"></section>
+      </section>
+    </section>
+
+    <!-- SETTINGS: all configuration moved here to clear main views -->
+    <section id="settingsView" class="view" role="tabpanel" aria-labelledby="settingsTab" hidden="">
+      <!-- General -->
+      <section class="panel settings-section" aria-labelledby="settingsGeneralTitle">
+        <div class="settings-section-header">
+          <h2 id="settingsGeneralTitle" data-i18n="settings.general">General</h2>
+          <p class="field-help" data-i18n="settings.generalHelp">Language and interface preferences.</p>
+        </div>
+        <div class="locale-row">
+          <label class="field-label" for="localeSelect" data-i18n="locale.label">Language</label>
+          <select id="localeSelect" class="select-control">
+            <option value="auto" data-i18n="locale.auto">Automatic</option>
+            <option value="en" data-i18n="locale.en">English</option>
+            <option value="fr" data-i18n="locale.fr">Français</option>
+            <option value="ar" data-i18n="locale.ar">العربية</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Scroll pacing -->
+      <section class="panel settings-section" aria-labelledby="paceTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker" data-i18n="pace.kicker">ADAPTIVE SCROLL</p>
+            <h2 id="paceTitle" data-i18n="pace.title">Smart pacing</h2>
+          </div>
+          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">AUTO-ADAPTIVE</span>
+        </div>
+        <label class="field-label" for="modeSelect" data-i18n="pace.modeLabel">Adaptive mode</label>
+        <select id="modeSelect" class="select-control">
+          <option value="standard" data-i18n="mode.standard">Adaptive Standard</option>
+          <option value="fast" data-i18n="mode.fast">Adaptive Fast</option>
+          <option value="super_fast" data-i18n="mode.super_fast">Adaptive Super Fast</option>
+        </select>
+        <p id="modeDescription" class="field-help" data-i18n="pace.description">Adaptive movement and pauses are automatic. The selected feed keeps scrolling in the background; Chrome may throttle hidden tabs.</p>
+      </section>
+
+      <section class="panel settings-section" aria-labelledby="limitsTitle">
+        <div class="panel-heading compact-heading">
+          <div>
+            <p class="section-kicker" data-i18n="limits.kicker">SESSION GUARDRAILS</p>
+            <h2 id="limitsTitle" data-i18n="limits.title">Limits &amp; safeguards</h2>
+          </div>
+        </div>
+        <div class="two-fields">
+          <div>
+            <label class="field-label" for="maxMinutes" data-i18n="limits.time">Time limit</label>
+            <select id="maxMinutes" class="select-control">
+              <option value="5" data-i18n="time.minutes" data-i18n-count="5">5 minutes</option>
+              <option value="15" selected="" data-i18n="time.minutes" data-i18n-count="15">15 minutes</option>
+              <option value="30" data-i18n="time.minutes" data-i18n-count="30">30 minutes</option>
+              <option value="60" data-i18n="time.minutes" data-i18n-count="60">60 minutes</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="maxSteps" data-i18n="limits.steps">Step limit</label>
+            <select id="maxSteps" class="select-control">
+              <option value="40" data-i18n="steps.count" data-i18n-count="40">40 steps</option>
+              <option value="80" data-i18n="steps.count" data-i18n-count="80">80 steps</option>
+              <option value="120" data-i18n="steps.count" data-i18n-count="120">120 steps</option>
+              <option value="180" selected="" data-i18n="steps.count" data-i18n-count="180">180 steps</option>
+              <option value="300" data-i18n="steps.count" data-i18n-count="300">300 steps</option>
+              <option value="500" data-i18n="steps.count" data-i18n-count="500">500 steps</option>
+            </select>
+          </div>
+        </div>
+        <div class="toggle-list">
+          <label class="toggle-row" for="pauseOnInput">
+            <span><strong data-i18n="limits.pauseInput">Pause on my input</strong><small data-i18n="limits.pauseInputHelp">Pause when you use the page.</small></span>
+            <input id="pauseOnInput" type="checkbox" checked="">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Detection -->
+      <section class="panel settings-section" aria-labelledby="settingsDetectionTitle">
+        <div class="settings-section-header">
+          <h2 id="settingsDetectionTitle" data-i18n="settings.detection">Detection</h2>
+          <p class="field-help" data-i18n="settings.detectionHelp">How posts are expanded and filtered in the feed.</p>
+        </div>
+        <label class="toggle-row auto-expand-row" for="autoExpand">
+          <span><strong data-i18n="detector.autoExpand">Auto-expand visible long posts</strong><small data-i18n="detector.autoExpandHelp">Only while the hiring monitor is running.</small></span>
+          <input id="autoExpand" type="checkbox" checked="">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="toggle-row feed-filter-toggle" for="matchesOnly">
+          <span><strong data-i18n="export.matchesOnly">Show selected matches in feed only</strong><small data-i18n="export.matchesOnlyHelp">While monitoring; stop to restore. Uncertain or partial posts stay visible.</small></span>
+          <input id="matchesOnly" type="checkbox">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+      </section>
+
+      <!-- History -->
+      <section class="panel settings-section" aria-labelledby="settingsHistoryTitle">
+        <div class="settings-section-header">
+          <h2 id="settingsHistoryTitle" data-i18n="settings.history">History</h2>
+          <p class="field-help" data-i18n="settings.historyHelp">Local post history is off by default.</p>
+        </div>
+        <div class="history-controls">
+          <label class="field-label" for="historyMode" data-i18n="history.label">Save new post history</label>
+          <select id="historyMode" class="select-control">
+            <option value="off" data-i18n="history.off">Off — do not save new posts</option>
+            <option value="session" data-i18n="history.session">Browser session only</option>
+            <option value="persistent" data-i18n="history.persistent">Persistent on this device</option>
+          </select>
+          <input id="keepHistory" type="checkbox" hidden="">
+          <p class="field-help" data-i18n="history.help">Off by default. Changing mode never copies old records; exports can read both stores.</p>
+          <div class="history-actions">
+            <label class="field-label" for="historyRetention" data-i18n="history.retention">Retention</label>
+            <select id="historyRetention" class="select-control">
+              <option value="7" data-i18n="history.days" data-i18n-count="7">7 days</option>
+              <option value="30" selected="" data-i18n="history.days" data-i18n-count="30">30 days</option>
+              <option value="90" data-i18n="history.days" data-i18n-count="90">90 days</option>
+            </select>
+            <button id="clearHistoryBtn" class="button button-secondary clear-history-btn" type="button" disabled="" data-i18n="history.clear">Clear saved history</button>
+          </div>
+          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Local history is off.</p>
+        </div>
+      </section>
+
+      <!-- Export -->
+      <section class="panel settings-section" aria-labelledby="settingsExportTitle">
+        <div class="settings-section-header">
+          <h2 id="settingsExportTitle" data-i18n="settings.export">Export</h2>
+          <p class="field-help" data-i18n="settings.exportHelp">Choose format and fields for local downloads. Full text and emails are off by default.</p>
+        </div>
         <div class="export-options">
           <div class="export-format-row">
             <label class="field-label" for="exportFormat" data-i18n="export.format">File format</label>
@@ -243,21 +299,18 @@
             </div>
           </details>
         </div>
-        <label class="toggle-row feed-filter-toggle" for="matchesOnly">
-          <span><strong data-i18n="export.matchesOnly">Show selected matches in feed only</strong><small data-i18n="export.matchesOnlyHelp">While monitoring; stop to restore. Uncertain or partial posts stay visible.</small></span>
-          <input id="matchesOnly" type="checkbox">
-          <span class="switch" aria-hidden="true"></span>
-        </label>
-        <p id="processedDetail" class="processed-detail" data-i18n="results.processedInitial">Start the monitor to scan posts as you browse.</p>
-        <p id="exportStatus" class="export-status" data-i18n="export.initial">User-initiated local JSON or CSV. Choose fields and optionally export only the selected category.</p>
-        <div id="matchList" class="match-list">
-          <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">⌕</span>
-            <strong data-i18n="results.emptyTitle">No posts scanned yet</strong>
-            <span data-i18n="results.emptyDetail">Start the monitor to detect likely hiring posts.</span>
-          </div>
+      </section>
+
+      <!-- Danger / diagnostics -->
+      <section class="panel settings-section settings-danger" aria-labelledby="settingsDataTitle">
+        <div class="settings-section-header">
+          <h2 id="settingsDataTitle" data-i18n="settings.data">Local data</h2>
+          <p class="field-help" data-i18n="settings.dataHelp">Manage stored posts and diagnostics on this device.</p>
         </div>
-        <section id="postDetail" class="post-detail" aria-label="Full post details" hidden="" data-i18n-aria-label="results.details"></section>
+        <div class="history-actions">
+          <button id="clearAllDataBtn" class="button button-secondary" type="button" data-i18n="history.clearAll">Clear all local data</button>
+          <button id="diagnosticBtn" class="button button-secondary" type="button" data-i18n="history.diagnostic">Download sanitized diagnostic</button>
+        </div>
       </section>
     </section>
 
