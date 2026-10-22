@@ -63,8 +63,12 @@ test("nested repost extraction stays scoped to each selected post body", () => {
 test("external lookalike hosts never become LinkedIn identity", () => {
   const { document, api } = loadMonitor("<article data-urn='urn:li:activity:1'><div class='feed-shared-text'>We are hiring.</div><a href='https://www.linkedin.com.evil.invalid/in/fake'>Fake</a><a href='https://evil.invalid/posts/acme_activity-2'>Fake post</a></article>");
   const record = api.extractPostRecord(document.querySelector("article"), { capturedAtMs: Date.now() });
-  assert.equal(record.author.profileUrl, null);
-  assert.equal(record.permalink, null);
+  assert.equal(record.author.profileUrl, null, "a lookalike host must never become a profile identity");
+  // The permalink is now built from the card's own post URN when no anchor canonicalizes. That
+  // is trusted identity from the card itself; the lookalike hrefs must still be rejected.
+  assert.equal(record.permalink, "https://www.linkedin.com/feed/update/urn:li:activity:1/");
+  assert.ok(!/evil\.invalid/.test(record.permalink || ""), "a lookalike host became the permalink");
+  assert.ok(!/evil\.invalid/.test(record.author.profileUrl || ""), "a lookalike host became the author");
 });
 
 test("missing selectors return explicit partial metadata rather than throwing", () => {

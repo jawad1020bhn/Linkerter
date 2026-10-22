@@ -173,11 +173,71 @@
     return deduplicateNestedRoots(Array.from(roots));
   }
 
+  const POST_URN_PATTERN = /urn:li:(?:activity|share|ugcPost|jobPosting|job):[\w-]+/i;
+  const ACTOR_SELECTOR = "[class*='update-components-actor'],[class*='feed-shared-actor']";
+  const ACTOR_NAME_SELECTOR = "[class*='actor__name'],[data-test-id*='actor-name']";
+  const REACTOR_PATTERN = /aime ce contenu|adore ce contenu|a republi(?:é|e) ce contenu|a partag(?:é|e) ce contenu|a ajout(?:é|e) un commentaire|c(?:é|e)l(?:è|e)bre ce contenu|likes? this|loves? this|reposted this|shared this|commented on this|celebrates this/iu;
+
+  // `[class*='update-components-actor']` also matches every BEM child of the actor block, so
+  // only the container itself counts as an actor.
+  function isActorContainer(element) {
+    const className = typeof element.className === "string" ? element.className : "";
+    return className.split(/\s+/).some((token) => token === "update-components-actor" || token === "feed-shared-actor");
+  }
+  const IDENTITY_ATTRIBUTES = ["data-urn", "data-id", "data-entity-urn", "data-urn-public", "id"];
+
+  function urnIn(value) {
+    if (!value) return "";
+    let text = String(value);
+    try { text = decodeURIComponent(text); } catch (_error) { /* a malformed escape is still searchable raw */ }
+    const match = text.match(POST_URN_PATTERN);
+    return match ? match[0] : "";
+  }
+
   function postIdentityOf(element) {
     if (!element || typeof element.getAttribute !== "function") return "";
-    const value = `${element.getAttribute("data-urn") || ""} ${element.getAttribute("data-id") || ""}`;
-    const match = value.match(/urn:li:(?:activity|share|ugcpost):[^\s"']+/i);
-    return match ? match[0] : "";
+    for (const attribute of IDENTITY_ATTRIBUTES) {
+      const found = urnIn(element.getAttribute(attribute));
+      if (found) return found;
+    }
+    return "";
+  }
+
+  // A real 2026 feed card carries its post URN in the permalink anchor and not always in a
+  // data attribute. Identity, permalink and deduplication all depend on finding it, so the
+  // whole card is searched: attributes, then descendants, then hrefs, then ancestors.
+  function urnFromHrefs(element) {
+    if (!element || typeof element.querySelectorAll !== "function") return "";
+    for (const anchor of Array.from(element.querySelectorAll("a[href]"))) {
+      const found = urnIn(anchor.getAttribute("href") || anchor.href);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  // A reshare or a reactor wrapper ("X aime ce contenu", "X a republié ce contenu",
+  // "X a ajouté un commentaire") means the post that was detected is the INNER one. Author,
+  // permalink, identity and age must come from that container, otherwise a shared vacancy is
+  // attributed to whoever shared it and the same post forks into one record per reactor.
+  function resolveContentScope(root) {
+    if (!root || typeof root.querySelectorAll !== "function") return root;
+    const reshares = Array.from(root.querySelectorAll("[class*='reshare']"))
+      .filter((node) => cleanText(node.innerText || node.textContent || "").length > 40);
+    if (reshares.length) return reshares[reshares.length - 1];
+    const actors = Array.from(root.querySelectorAll(ACTOR_SELECTOR)).filter(isActorContainer);
+    if (actors.length > 1 && REACTOR_PATTERN.test(cleanText(actors[0].innerText || actors[0].textContent || ""))) {
+      return actors[actors.length - 1].parentElement || root;
+    }
+    return root;
+  }
+
+  function urnFromDescendants(element) {
+    if (!element || typeof element.querySelectorAll !== "function") return "";
+    for (const node of Array.from(element.querySelectorAll("[data-urn],[data-id],[data-entity-urn],[id]"))) {
+      const found = postIdentityOf(node);
+      if (found) return found;
+    }
+    return "";
   }
 
   // One post must never be archived twice. A nested element that looks like a card is part of
@@ -216,14 +276,23 @@
     return roots;
   }
 
+  // True when `node` is part of the post `root` describes. The selected root is often the
+  // outer feed wrapper while the real card — actor, body, permalink — sits inside it, so a
+  // card boundary only stops the walk when it carries a DIFFERENT post identity. That is how a
+  // reshare nested in the post that shares it stays separate, while this card's own inner
+  // elements stay reachable.
   function belongsToPostRoot(node, root) {
+    const rootIdentity = postIdentityOf(root) || urnFromDescendants(root) || urnFromHrefs(root);
     let current = node;
     while (current) {
       if (current === root) return true;
       if (current !== node) {
         const role = (current.getAttribute("role") || "").toLowerCase();
-        if (current.tagName === "ARTICLE" || role === "article" || current.hasAttribute("data-urn") ||
-            /urn:li:(?:activity|share|ugcpost):/i.test(current.getAttribute("data-id") || "")) return false;
+        const isBoundary = current.tagName === "ARTICLE" || role === "article" || postIdentityOf(current) !== "";
+        if (isBoundary && rootIdentity) {
+          const identity = postIdentityOf(current) || urnFromDescendants(current) || urnFromHrefs(current);
+          if (identity && identity !== rootIdentity) return false;
+        }
       }
       current = current.parentElement;
     }
@@ -239,10 +308,12 @@
   function findBodyNode(root, control = null) {
     const selectors = [
       '[class*="feed-shared-update-v2__description-wrapper"]',
+      '[class*="update-components-text"]',
       '[data-test-id*="post-text"]',
       '[data-test-id*="update-text"]',
       '[class*="feed-shared-text"]',
       '[class*="inline-show-more-text"]',
+      '[class*="feed-shared-update-v2__description"]',
       '[class*="update__description"]'
     ];
     for (const selector of selectors) {
@@ -286,54 +357,70 @@
     return Boolean(label) && CONTROL_LABELS.test(label);
   }
 
-  function collectChromeNodes(root, body) {
-    const nodes = [];
-    const push = (list) => {
-      for (const node of list) if (node && body.contains(node) && !nodes.includes(node)) nodes.push(node);
-    };
-    // Expansion and comment controls are page furniture, never post text.
-    push(Array.from(body.querySelectorAll("button,[role='button']")).filter((element) => isControlChrome(element, body)));
-    if (body === root) {
-      // Card-level fallback: keep the post body only, never the actor, timestamp, action row,
-      // control menu, or comment chrome.
-      push(Array.from(body.querySelectorAll(
-        "time,[datetime],[class*='actor'],[class*='social-actions'],[class*='control-menu'],[class*='sub-description'],[class*='timestamp'],[class*='comment']"
-      )));
+  // Card furniture that must never reach the text that is classified, deduplicated,
+  // displayed, or exported. Applied to a clone, structurally: splicing each chrome node's own
+  // text out of the whole card with lastIndexOf fails on a real feed, where bullets,
+  // private-use icon glyphs, emoji and localized labels mean the chunk never matches exactly.
+  const CHROME_SELECTORS = Object.freeze([
+    "[hidden]", ".visually-hidden", ".sr-only",
+    "[class*='visually-hidden']", "[class*='a11y']", "[class*='screen-reader']", "[class*='assistive']",
+    "[class*='update-components-actor']", "[class*='feed-shared-actor']",
+    "[class*='social-actions']", "[class*='social-details']", "[class*='reactions']", "[class*='reaction-count']",
+    "[class*='control-menu']", "[class*='timestamp']", "[class*='sub-description']",
+    "[class*='comment']", "[class*='translation']", "[class*='promo']", "[class*='sponsor']",
+    "[class*='job-card']", "[class*='jobs-unified']", "[class*='job-entity']",
+    "[class*='video-playback']", "[class*='video-controls']", "[class*='profile-create-dropdown']",
+    "time", "[datetime]", "button", "[role='button']", "nav", "form", "input", "select", "textarea", "svg"
+  ]);
+
+  const SPONSORED_PATTERN = /(?:post|publication|annonce)\s+sponsoris|\bsponsored\b|\bpromoted\b|منشور\s+ممول|إعلان\s+ممول|\sممول\s/iu;
+
+  function isSponsoredCard(root) {
+    if (!root) return false;
+    if (root.querySelector("[class*='promo'],[class*='sponsor'],[data-test-id*='sponsor']")) return true;
+    for (const node of Array.from(root.querySelectorAll("[aria-label],[class*='actor'],[class*='sub-description']")).slice(0, 12)) {
+      const label = `${node.getAttribute("aria-label") || ""} ${node.textContent || ""}`;
+      if (SPONSORED_PATTERN.test(label)) return true;
     }
-    return nodes;
+    return false;
+  }
+
+  function visibleText(node) {
+    const clone = node.cloneNode(true);
+    for (const selector of CHROME_SELECTORS) {
+      try {
+        clone.querySelectorAll(selector).forEach((element) => element.remove());
+      } catch (_error) { /* an engine that rejects one selector still honours the rest */ }
+    }
+    return clone.textContent || "";
   }
 
   function nodeText(node) {
-    if (typeof node.innerText === "string") return node.innerText;
-    const visibleClone = node.cloneNode(true);
-    visibleClone.querySelectorAll("[hidden],[aria-hidden='true'],.visually-hidden").forEach((element) => element.remove());
-    return visibleClone.textContent || "";
-  }
-
-  // Control labels and card chrome must not enter the text that is classified, deduplicated,
-  // displayed, and exported. Removing their own text keeps innerText semantics in Chrome while
-  // staying deterministic in tests.
-  function stripChromeText(text, chromeNodes) {
-    let result = text;
-    for (const node of chromeNodes) {
-      const chunk = cleanText(nodeText(node));
-      if (!chunk) continue;
-      const index = result.lastIndexOf(chunk);
-      if (index >= 0) result = `${result.slice(0, index)} ${result.slice(index + chunk.length)}`;
-    }
-    return cleanText(result);
+    // LinkedIn renders offscreen feed cards with content-visibility, so innerText comes back
+    // empty for most of a long feed. Falling back to raw textContent is what pulled hidden
+    // accessibility labels, buttons and reaction counts into post text; strip them instead.
+    const inline = typeof node.innerText === "string" ? cleanText(node.innerText) : "";
+    return inline || cleanText(visibleText(node));
   }
 
   function getPostTextDetails(root) {
     const body = findBodyNode(root);
     const control = findSeeMore(root, body);
-    const text = stripChromeText(cleanText(nodeText(body) || body.textContent || ""), collectChromeNodes(root, body));
+    const text = cleanText(nodeText(body) || "");
+    // Text counts as incomplete only while LinkedIn is still hiding some of it behind an
+    // unexpanded control. Using the card as the text scope is no longer treated as incomplete:
+    // with chrome removed structurally it yields the same body text.
     const fullTextAvailableWithoutExpansion = !control && body !== root;
     return {
       text,
       control,
       body,
+      // Incomplete when LinkedIn is still hiding text behind a control, and also when the
+      // body node could not be located at all: card-scoped text is a guess, not a promise.
+      // `domHealth.textFallbacks` reports how often that guess is needed.
       partial: Boolean(control) || body === root,
+      usedCardFallback: body === root,
+      sponsored: isSponsoredCard(root),
       fullTextAvailableWithoutExpansion
     };
   }
@@ -343,16 +430,23 @@
   }
 
   function getStableId(root) {
-    const urn = root.getAttribute("data-urn");
-    const id = root.getAttribute("data-id");
-    const direct = String(urn || id || "").slice(0, 100);
-    if (direct) return direct;
+    // The content scope first: for a reshare, the identity that must deduplicate across runs
+    // and across different people sharing it is the shared post's, not the share's.
+    for (const target of [resolveContentScope(root), root]) {
+      if (!target) continue;
+      const own = postIdentityOf(target);
+      if (own) return own.slice(0, 100);
+      const nested = urnFromDescendants(target);
+      if (nested) return nested.slice(0, 100);
+      const fromLink = urnFromHrefs(target);
+      if (fromLink) return fromLink.slice(0, 100);
+    }
     // A body node that reached this point must not fork into a separate text identity for the
     // post it belongs to; inherit the enclosing card's post identity instead.
     let current = root.parentElement;
     let depth = 0;
     while (current && current !== document.body && depth < 12) {
-      const inherited = postIdentityOf(current);
+      const inherited = postIdentityOf(current) || urnFromHrefs(current);
       if (inherited) return inherited.slice(0, 100);
       current = current.parentElement;
       depth += 1;
@@ -439,27 +533,28 @@
   }
 
   function getPostPermalink(root, hrefs = getHrefs(root)) {
-    for (const href of hrefs) {
+    const scope = resolveContentScope(root);
+    const ordered = scope === root ? hrefs : [...getHrefs(scope), ...hrefs];
+    for (const href of ordered) {
       const absolute = toAbsoluteHttpUrl(href);
       const canonical = shared.canonicalizeLinkedInUrl(absolute, "permalink");
       if (canonical) return canonical;
     }
-    return null;
+    // The post URN is enough to build the canonical permalink. Without this, a card whose
+    // timestamp link is rendered lazily exports no permalink at all and the reviewer has no
+    // way to open the post that was detected.
+    const urn = getStableId(root);
+    return urn && POST_URN_PATTERN.test(urn) ? `https://www.linkedin.com/feed/update/${urn}/` : null;
   }
 
   function getAuthorDetails(root, hrefs = getHrefs(root)) {
-    const nameSelectors = [
-      ".update-components-actor__name", ".feed-shared-actor__name", "[data-test-id*='actor-name']"
-    ];
+    // The author of the detected content, not of the reaction or reshare that surfaced it.
+    const scope = resolveContentScope(root);
+    const actor = Array.from(scope.querySelectorAll(ACTOR_SELECTOR)).filter(isActorContainer)[0] || scope;
     let name = null;
-    for (const selector of nameSelectors) {
-      const node = Array.from(root.querySelectorAll(selector))
-        .find((item) => belongsToPostRoot(item, root) && cleanText(item.innerText || item.textContent || "").length > 1);
-      if (node) {
-        name = cleanText(node.innerText || node.textContent || "").slice(0, 120);
-        break;
-      }
-    }
+    const nameNode = Array.from(actor.querySelectorAll(ACTOR_NAME_SELECTOR))
+      .find((item) => cleanText(item.innerText || item.textContent || "").length > 1);
+    if (nameNode) name = cleanText(nameNode.innerText || nameNode.textContent || "").slice(0, 120);
     let profileUrl = null;
     for (const href of hrefs) {
       const absolute = toAbsoluteHttpUrl(href);
@@ -480,12 +575,74 @@
       .replace(/٬/g, ",");
   }
 
+  // Real feed timestamps are mostly absolute in French ("18 oct.", "27 sept.", "24 sept.")
+  // and only sometimes relative ("13 h", "34 min", "6 j"). Reading only relative forms is why
+  // 31 of 32 exported records had no age at all.
+  const ABSOLUTE_DATE_PATTERNS = [
+    /\b\d{1,2}\s+(?:janvier|janv|f[ée]vrier|f[ée]vr|fevrier|fev|mars|mar|avril|avr|mai|juin|juillet|juil|ao[ûu]t|septembre|sept|sep|octobre|oct|novembre|nov|d[ée]cembre|d[ée]c|dec)\.?(?![\p{L}])/iu,
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/iu,
+    /\b\d{1,2}\s+(?:يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر|كانون\s+الثاني|شباط|آذار|نيسان|أيّار|مايو|حزيران|تموز|آب|أيلول|تشرين\s+الأول|تشرين\s+الثاني|كانون\s+الأول)\b/u
+  ];
+  const MONTH_INDEX = [
+    [/^janv|^janvier|^jan/iu, 0], [/^f[ée]vr?|^fevr|^f[ée]vrier|^feb/iu, 1], [/^mars|^mar/iu, 2],
+    [/^avr|^avril|^apr/iu, 3], [/^mai|^may/iu, 4], [/^juin|^jun/iu, 5], [/^juil|^jul/iu, 6],
+    [/^ao[ûu]t|^aug/iu, 7], [/^sept?|^sep|^septembre/iu, 8], [/^oct|^octobre/iu, 9],
+    [/^nov|^novembre/iu, 10], [/^d[ée]c|^dec|^d[ée]cembre/iu, 11]
+  ];
+  const ARABIC_MONTH_INDEX = [
+    [/يناير|كانون\s+الثاني|شباط/u, 0], [/فبراير|شباط/u, 1], [/مارس|آذار/u, 2], [/أبريل|نيسان|أيّار/u, 3],
+    [/مايو|أيّار|حزيران/u, 4], [/يونيو|حزيران/u, 5], [/يوليو|تموز/u, 6], [/أغسطس|آب/u, 7],
+    [/سبتمبر|أيلول/u, 8], [/أكتوبر|تشرين\s+الأول/u, 9], [/نوفمبر|تشرين\s+الثاني/u, 10],
+    [/ديسمبر|كانون\s+الأول/u, 11]
+  ];
+
+  // Absolute labels carry no year, so the most recent past occurrence of that month and day is
+  // the one being shown.
+  function parseAbsoluteDateMs(label, capturedAtMs) {
+    const text = asciiDigits(cleanText(label));
+    let day = null;
+    let month = null;
+    const latin = text.match(/\b(\d{1,2})\s+([\p{L}\.]{3,10})/u);
+    if (latin) {
+      day = Number(latin[1]);
+      for (const [pattern, index] of MONTH_INDEX) if (pattern.test(latin[2])) { month = index; break; }
+    }
+    if (month === null) {
+      const english = text.match(/\b([\p{L}\.]{3,10})\s+(\d{1,2})\b/u);
+      if (english) {
+        day = Number(english[2]);
+        for (const [pattern, index] of MONTH_INDEX) if (pattern.test(english[1])) { month = index; break; }
+      }
+    }
+    if (month === null) {
+      const arabic = text.match(/\b(\d{1,2})\s+(\S+(?:\s+\S+)?)/u);
+      if (arabic) {
+        day = Number(arabic[1]);
+        for (const [pattern, index] of ARABIC_MONTH_INDEX) if (pattern.test(arabic[2])) { month = index; break; }
+      }
+    }
+    if (day === null || month === null || day < 1 || day > 31) return null;
+    const captured = new Date(capturedAtMs);
+    let candidate = Date.UTC(captured.getUTCFullYear(), month, day, 12, 0, 0);
+    // A feed shows this year unless the date has not happened yet, in which case it is last year's.
+    if (candidate > capturedAtMs + 86_400_000) candidate = Date.UTC(captured.getUTCFullYear() - 1, month, day, 12, 0, 0);
+    return Number.isFinite(candidate) ? candidate : null;
+  }
+
   function findAgeLabel(value) {
     const text = asciiDigits(cleanText(value));
+    for (const pattern of ABSOLUTE_DATE_PATTERNS) {
+      const absolute = text.match(pattern);
+      if (absolute) return absolute[0].trim();
+    }
     const patterns = [
       /\b(?:just now|a few seconds ago|yesterday)\b/iu,
-      /\b(?:\d+|a|an)\s*(?:seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|wks?|wk|w|months?|mo|years?|yrs?|yr|y)(?:\s+ago)?\b/iu,
-      /\b(?:il y a\s+)?(?:\d+|un|une)\s*(?:secondes?|s|minutes?|min|heures?|h|jours?|j|semaines?|sem|mois|ans?|années?)(?:\s+ago)?\b/iu,
+      // A bare single-letter unit may only follow a digit: with "a|an" allowed in front, the
+      // ordinary English word "and" parsed as "an" + "d" and was exported as a post age.
+      /\b\d+\s*(?:s|m|h|d|w|y|mo|yr|min|hr|hrs|wk|wks|yrs?)\b/iu,
+      /\b(?:a|an|one|two|three|four|five|ten|few|several|\d+)\s+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|wk|months?|years?|yrs?)\b/iu,
+      /\b(?:il y a\s+)?\d+\s*(?:secondes?|s|minutes?|min|heures?|h|jours?|j|semaines?|sem|mois|ans?|ann[ée]es?)\b/iu,
+      /\b(?:il y a\s+)?(?:un|une|deux|trois|quelques)\s+(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)\b/iu,
       /(?:منذ\s*)?\d+\s*(?:ثانية|ثواني?|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|اسبوع|أسابيع|شهر|أشهر|سنة|سنوات)/u,
       /(?:à l'instant|اليوم|أمس|الآن)/iu
     ];
@@ -548,6 +705,11 @@
       const candidate = findAgeLabel(`${node.getAttribute("aria-label") || ""} ${node.getAttribute("title") || ""} ${node.innerText || node.textContent || ""}`);
       if (candidate && (!label || candidate.length < label.length)) label = candidate;
     }
+    // An absolute label is a real publish date even when the page exposed no datetime attribute.
+    if (!publishedAt && label) {
+      const absoluteMs = parseAbsoluteDateMs(label, capturedAtMs);
+      if (absoluteMs !== null) publishedAt = new Date(absoluteMs).toISOString();
+    }
     const publishedMs = publishedAt ? Date.parse(publishedAt) : NaN;
     const ageSecondsApprox = Number.isFinite(publishedMs)
       ? Math.max(0, Math.floor((capturedAtMs - publishedMs) / 1000))
@@ -592,7 +754,19 @@
   }
 
   function getPostMetrics(root) {
-    const nodes = Array.from(root.querySelectorAll("[aria-label],[title],button,[role='button'],[class*='social-count']"));
+    // Only counts that belong to this post's own content may be reported. A reactor wrapper, a
+    // nested reshare or the comment thread carries counts of its own, and attributing those to
+    // the post is worse than reporting nothing, so they are excluded. Counts are never inferred
+    // from bare numbers: the 2026-10-22 export showed those are dates and follower counts too.
+    const scope = resolveContentScope(root) || root;
+    const nodes = Array.from(scope.querySelectorAll("[aria-label],[title],button,[role='button'],[class*='social-count']"))
+      .filter((node) => !isCommentThreadNode(node, scope));
+    // Inside a card the social-actions region is the post's own engagement bar. It is tried
+    // before any other labelled node so a job widget or follow button cannot win the match.
+    const inSocialRegion = (node) => Boolean(
+      node.closest && node.closest("[class*='social-actions'],[class*='social-details'],[class*='social-count']")
+    );
+    nodes.sort((a, b) => Number(inSocialRegion(b)) - Number(inSocialRegion(a)));
     const metricPatterns = {
       reactions: /reactions?|likes?|réactions?|j['’]aime|تفاعل|إعجاب|اعجاب/iu,
       comments: /comments?|commentaires?|تعليقات|تعليق/iu,
@@ -665,7 +839,7 @@
   function extractPostRecord(root, { capturedAtMs = Date.now(), previous = null } = {}) {
     const details = getPostTextDetails(root);
     const hrefs = getHrefs(root);
-    const classification = classifier.classify(details.text, { hrefs });
+    const classification = classifier.classify(details.text, { hrefs, sponsored: details.sponsored });
     const category = details.partial && classification.category === "none" ? "partial" : classification.category;
     const key = getArchiveKey(root, details.text);
     return createExportRecord(root, key, details, classification, category, previous, capturedAtMs);
@@ -885,10 +1059,11 @@
     if (details.body !== root) domHealth.textSelectorMatches += 1;
     else domHealth.textFallbacks += 1;
     if (details.control) domHealth.seeMoreControls += 1;
+    if (details.sponsored) domHealth.sponsoredCards = (domHealth.sponsoredCards || 0) + 1;
 
     let cached = classificationCache.get(root);
     if (!cached || cached.fingerprint !== fingerprint) {
-      const classification = classifier.classify(details.text, { hrefs });
+      const classification = classifier.classify(details.text, { hrefs, sponsored: details.sponsored });
       cached = {
         fingerprint,
         classification,
@@ -1017,6 +1192,7 @@
       domHealth.textSelectorMatches = 0;
       domHealth.textFallbacks = 0;
       domHealth.seeMoreControls = 0;
+      domHealth.sponsoredCards = 0;
       for (let offset = 0; offset < candidates.length; offset += 25) {
         const batch = candidates.slice(offset, offset + 25);
         for (const root of batch) {
