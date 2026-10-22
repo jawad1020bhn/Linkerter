@@ -16,6 +16,12 @@ here temporarily for one reason only:
 > file's **location** is pending, and only the repository owner (or an App
 > with `workflows` permission) can put it there.
 
+The workflow runs `npm ci`, `npm test`, the two measurement gates
+(`npm run probe:classifier -- --strict` and `npm run probe:feed -- --strict`),
+`scripts/verify-superpowers.sh`, an independent release-archive verification, and
+`REQUIRE_CHROME=1 npm run test:browser`, then uploads the browser evidence as an
+artifact.
+
 Until activation, **CI does not run on GitHub** and the
 `REQUIRE_CHROME=1 npm run test:browser` gate has not executed in CI — this
 remains an open gate in `docs/store/release-checklist.md`. Do not treat this
