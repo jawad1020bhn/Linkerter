@@ -208,6 +208,7 @@
 
   Object.assign(en, {
     "tabs.section": "Extension sections", "scroll.controls": "Scrolling controls", "pace.smart": "SMART ALGORITHM", "pace.locked": "LOCKED GUARDRAILS", "monitor.duplicates": "{count} duplicate cards merged", "results.author": "Author: {name}", "results.unavailable": "unavailable", "results.metrics": "Reactions: {reactions} · Comments: {comments} · Reposts: {reposts} · Views: {views}",
+    "status.section": "Session status", "scroll.pauseStop": "Pause or stop", "dock.section": "Primary", "settings.nav": "Settings",
     "connection.checking": "CHECKING", "connection.offline": "NOT CONNECTED", "connection.openFeed": "OPEN FEED", "connection.background": "FEED BACKGROUND", "connection.feed": "LINKEDIN FEED",
     "target.noFeed": "NO FEED SELECTED", "target.active": "FEED TAB ACTIVE", "target.background": "FEED TAB IN BACKGROUND", "target.selected": "This tab is selected. Scrolling and local gathering are available.", "target.backgroundDetail": "Scrolling and gathering continue in the background. Chrome may throttle hidden tabs; return here to interact.",
     "notice.selectFeed": "Select an open LinkedIn feed tab to use the popup.", "notice.refreshFeed": "Refresh this LinkedIn feed tab so the extension scripts can load.", "notice.unavailable": "The selected feed tab is unavailable. Refresh LinkedIn or select another feed.", "notice.leftFeed": "The selected tab left the LinkedIn feed; monitoring has ended.", "notice.closed": "The selected LinkedIn tab closed; live monitoring has ended.",
@@ -219,6 +220,7 @@
   });
   Object.assign(fr, {
     "tabs.section": "Sections de l’extension", "scroll.controls": "Commandes de défilement", "pace.smart": "ALGORITHME INTELLIGENT", "pace.locked": "PROTECTIONS VERROUILLÉES", "monitor.duplicates": "{count} cartes en double fusionnées", "results.author": "Auteur : {name}", "results.unavailable": "indisponible", "results.metrics": "Réactions : {reactions} · Commentaires : {comments} · Republications : {reposts} · Vues : {views}",
+    "status.section": "État de la session", "scroll.pauseStop": "Mettre en pause ou arrêter", "dock.section": "Navigation principale", "settings.nav": "Réglages",
     "connection.checking": "VÉRIFICATION", "connection.offline": "NON CONNECTÉ", "connection.openFeed": "OUVRIR LE FLUX", "connection.background": "FLUX EN ARRIÈRE-PLAN", "connection.feed": "FLUX LINKEDIN",
     "target.noFeed": "AUCUN FLUX SÉLECTIONNÉ", "target.active": "ONGLET DE FLUX ACTIF", "target.background": "FLUX EN ARRIÈRE-PLAN", "target.selected": "Cet onglet est sélectionné. Le défilement et la collecte locale sont disponibles.", "target.backgroundDetail": "Le défilement et la collecte continuent en arrière-plan. Chrome peut ralentir les onglets masqués.",
     "notice.selectFeed": "Sélectionnez un onglet de flux LinkedIn ouvert.", "notice.refreshFeed": "Actualisez cet onglet LinkedIn pour charger les scripts de l’extension.", "notice.unavailable": "L’onglet sélectionné est indisponible. Actualisez LinkedIn ou choisissez un autre flux.", "notice.leftFeed": "L’onglet a quitté le flux LinkedIn ; la surveillance est terminée.", "notice.closed": "L’onglet LinkedIn sélectionné est fermé ; la surveillance est terminée.",
@@ -230,6 +232,7 @@
   });
   Object.assign(ar, {
     "tabs.section": "أقسام الإضافة", "scroll.controls": "عناصر التحكم في التمرير", "pace.smart": "خوارزمية ذكية", "pace.locked": "ضمانات مقفلة", "monitor.duplicates": "تم دمج {count} بطاقات مكررة", "results.author": "المؤلف: {name}", "results.unavailable": "غير متاح", "results.metrics": "التفاعلات: {reactions} · التعليقات: {comments} · إعادات النشر: {reposts} · المشاهدات: {views}",
+    "status.section": "حالة الجلسة", "scroll.pauseStop": "إيقاف مؤقت أو إيقاف", "dock.section": "التنقل الرئيسي", "settings.nav": "الإعدادات",
     "connection.checking": "جارٍ الفحص", "connection.offline": "غير متصل", "connection.openFeed": "افتح الخلاصة", "connection.background": "الخلاصة في الخلفية", "connection.feed": "خلاصة LINKEDIN",
     "target.noFeed": "لم تُحدد خلاصة", "target.active": "علامة الخلاصة نشطة", "target.background": "علامة الخلاصة في الخلفية", "target.selected": "علامة التبويب هذه محددة. التمرير والجمع المحلي متاحان.", "target.backgroundDetail": "يستمر التمرير والجمع في الخلفية. قد يبطئ Chrome علامات التبويب المخفية؛ عد هنا للتفاعل.",
     "notice.selectFeed": "حدد علامة تبويب خلاصة LinkedIn مفتوحة لاستخدام النافذة.", "notice.refreshFeed": "حدّث علامة تبويب LinkedIn هذه لتحميل برامج الإضافة.", "notice.unavailable": "علامة الخلاصة المحددة غير متاحة. حدّث LinkedIn أو اختر خلاصة أخرى.", "notice.leftFeed": "غادرت علامة التبويب خلاصة LinkedIn؛ انتهت المراقبة.", "notice.closed": "أُغلقت علامة LinkedIn المحددة؛ انتهت المراقبة المباشرة.",
