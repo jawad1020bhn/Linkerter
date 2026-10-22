@@ -381,8 +381,121 @@ function createHistoryCoordinator({ chromeApi = globalThis.chrome, now = () => D
   return { handle, register };
 }
 
+/*
+ * Development-only auto-reload.
+ *
+ * An unpacked extension is never updated by Chrome and Chrome does not watch the
+ * folder it was loaded from. `scripts/dev-auto-update.mjs` fast-forwards this
+ * checkout and writes `dev-autoreload.json`; this hook notices the new commit,
+ * stores it, reloads the extension, and (on the next worker start) reloads the
+ * LinkedIn tabs so the new content scripts are injected.
+ *
+ * It is inert unless `chrome.management.getSelf()` reports `development`, which
+ * is exactly "loaded unpacked in developer mode". `getSelf()` needs no
+ * permission, so the manifest stays at `activeTab` + `storage`, and no stamp
+ * file ships in a release archive.
+ */
+const DEV_STAMP_FILE = "dev-autoreload.json";
+const DEV_APPLIED_COMMIT_KEY = "devAutoReloadAppliedCommit";
+const DEV_PENDING_TAB_RELOAD_KEY = "devAutoReloadPendingTabReload";
+
+function createDevAutoReload(options = {}) {
+  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
+  const fetchImpl = options.fetch || ((...args) => fetch(...args));
+  const intervalMs = Number.isFinite(options.intervalMs) ? options.intervalMs : 5000;
+  let timer = null;
+  let busy = false;
+
+  function available() {
+    return Boolean(chromeApi && chromeApi.runtime && chromeApi.runtime.getURL && chromeApi.storage && chromeApi.storage.local);
+  }
+
+  async function isDevelopmentInstall() {
+    if (!chromeApi || !chromeApi.management || typeof chromeApi.management.getSelf !== "function") return false;
+    try {
+      const self = await chromeApi.management.getSelf();
+      return Boolean(self && self.installType === "development");
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  async function readStamp() {
+    try {
+      const response = await fetchImpl(chromeApi.runtime.getURL(DEV_STAMP_FILE), { cache: "no-store" });
+      if (!response || !response.ok) return null;
+      const value = await response.json();
+      return value && typeof value.commit === "string" && value.commit ? value : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function reloadPendingTabs() {
+    if (!chromeApi.tabs || typeof chromeApi.tabs.query !== "function" || typeof chromeApi.tabs.reload !== "function") return 0;
+    const stored = await chromeApi.storage.local.get(DEV_PENDING_TAB_RELOAD_KEY);
+    if (!stored || !stored[DEV_PENDING_TAB_RELOAD_KEY]) return 0;
+    await chromeApi.storage.local.remove(DEV_PENDING_TAB_RELOAD_KEY);
+    const tabs = await chromeApi.tabs.query({ url: ["https://www.linkedin.com/*"] });
+    let reloaded = 0;
+    for (const tab of Array.isArray(tabs) ? tabs : []) {
+      if (!tab || typeof tab.id !== "number") continue;
+      try {
+        await chromeApi.tabs.reload(tab.id);
+        reloaded += 1;
+      } catch (_error) {
+        /* A closing tab is not a failure worth surfacing. */
+      }
+    }
+    return reloaded;
+  }
+
+  async function check() {
+    if (!available() || busy) return "skipped";
+    busy = true;
+    try {
+      const stamp = await readStamp();
+      if (!stamp) return "no-stamp";
+      const stored = await chromeApi.storage.local.get(DEV_APPLIED_COMMIT_KEY);
+      if (stored && stored[DEV_APPLIED_COMMIT_KEY] === stamp.commit) return "unchanged";
+      await chromeApi.storage.local.set({
+        [DEV_APPLIED_COMMIT_KEY]: stamp.commit,
+        [DEV_PENDING_TAB_RELOAD_KEY]: stamp.reloadTabs !== false
+      });
+      chromeApi.runtime.reload();
+      return "reloaded";
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function start() {
+    if (timer) return false;
+    if (!(await isDevelopmentInstall())) return false;
+    try {
+      await reloadPendingTabs();
+    } catch (_error) {
+      /* Tab reload is best effort. */
+    }
+    void check();
+    timer = setInterval(() => { void check(); }, intervalMs);
+    return true;
+  }
+
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  return { start, stop, check, readStamp, reloadPendingTabs };
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { createHistoryCoordinator, normalizeHistoryRecord, HISTORY_KEYS, HISTORY_MESSAGE_TYPES };
+  module.exports = {
+    createHistoryCoordinator, normalizeHistoryRecord, createDevAutoReload,
+    HISTORY_KEYS, HISTORY_MESSAGE_TYPES, DEV_STAMP_FILE, DEV_APPLIED_COMMIT_KEY, DEV_PENDING_TAB_RELOAD_KEY
+  };
 } else if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
   createHistoryCoordinator().register();
+  createDevAutoReload().start().catch(() => {});
 }

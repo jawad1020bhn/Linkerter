@@ -58,6 +58,29 @@ The optional sanitized diagnostic contains extension/browser/protocol versions, 
 4. Open or refresh `https://www.linkedin.com/feed/` so the updated content scripts load.
 5. Click the extension’s toolbar button to open the popup. When LinkedIn is already active, the feed is selected automatically; otherwise, switch to the feed and choose **Use active feed tab**.
 
+## Auto-update while developing (unpacked)
+
+Chrome never updates an extension loaded with **Load unpacked** and never watches
+its folder, so each `git pull` used to mean: `chrome://extensions` → **Reload** →
+refresh LinkedIn. Run the watcher once and that becomes automatic:
+
+```sh
+npm run dev:auto-update
+```
+
+It polls `origin` (every 30 s), fast-forwards the checkout **only when it is
+clean and fast-forwardable**, and writes the new commit to the gitignored
+`dev-autoreload.json`. The development build notices the stamp, reloads itself
+through `chrome.runtime.reload()`, and refreshes the open LinkedIn tabs so the new
+content scripts are injected. Options include `--branch`, `--interval`, `--once`,
+`--no-pull`, and `--no-reload-tabs`.
+
+It is development-only: the hook runs solely for `installType === "development"`,
+adds no permission, sends no extension-side network request, refuses to overwrite
+uncommitted work, and ships in neither release archive. See
+[`docs/dev-auto-update.md`](docs/dev-auto-update.md) for options, the MV3
+service-worker caveat, and troubleshooting.
+
 ## Permissions and privacy
 
 - `activeTab`: allows interaction with the currently selected page when you open the popup.

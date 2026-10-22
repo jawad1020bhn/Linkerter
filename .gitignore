@@ -15,6 +15,10 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
+# Development-only auto-reload stamp (written by scripts/dev-auto-update.mjs)
+dev-autoreload.json
+dev-autoreload.json.*.tmp
+
 # Built extension archives and test evidence
 linkedin-feed-scroller.zip
 linkedin-feed-scroller-store.zip
