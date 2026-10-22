@@ -1,14 +1,14 @@
-# LinkedIn Feed Scroller
+# Linkerter – Adaptive LinkedIn Feed
 
-**Version 1.9.0** is a Manifest V3 Chrome extension with a toolbar popup for adaptive LinkedIn feed scrolling and local English, French, and Arabic hiring/recruiting detection. It does not like, comment, connect, message, or perform other engagement actions.
+**Version 2.0.0** is a Manifest V3 Chrome extension (Chrome 110+) with a toolbar popup for adaptive LinkedIn feed scrolling and local English, French, and Arabic hiring/recruiting detection. It does not like, comment, connect, message, or perform other engagement actions.
 
 ## Scrolling
 
-The popup provides exactly three modes, all explicitly Human-like:
+The popup provides exactly three adaptive modes:
 
-- **Human-like Standard:** balanced movement and the most generous reading pauses.
-- **Human-like Fast:** quicker movement with variable cadence and automatic slowdowns when the feed is dense or loading.
-- **Human-like Super Fast:** the quickest adaptive preset, capped at **15 minutes and 120 steps**. Pause-on-input stays locked on.
+- **Adaptive Standard:** balanced movement and the most generous reading pauses.
+- **Adaptive Fast:** quicker movement with variable cadence and automatic slowdowns when the feed is dense or loading.
+- **Adaptive Super Fast:** the quickest adaptive preset, capped at **15 minutes and 120 steps**. Pause-on-input stays locked on.
 
 Scroll distance, motion, wait time, and reading breaks are integrated into the local adaptive algorithm—there are no manual **Scroll chunk** or **Base wait** controls. It adjusts to visible post-text density, remaining distance, newly loaded content, and recent scroll progress, while varying smooth movement and inserting reading pauses. Session time and step limits remain configurable; Super Fast keeps its 15-minute / 120-step hard caps. All three modes keep scrolling in the selected LinkedIn tab when you switch away. The popup closes when focus moves elsewhere, but the content script attached to the selected feed continues the scroll loop; reopening the popup restores that per-window target. Chrome may throttle hidden tabs, so background pacing can slow or be delayed. Pacing is for readability and user control, not stealth or platform evasion. The extension stops when it leaves the feed or cannot detect feed movement.
 
@@ -21,14 +21,20 @@ Start the monitor from the **Hiring filter** tab. The selected LinkedIn feed rem
 - **Professional role-title families are not classifier keywords.** A title by itself must not classify a post as hiring-related. Email/contact details alone are also insufficient.
 - Duplicate cards with the same LinkedIn ID or permalink are merged in the result list and export archive. The monitor reports how many duplicate cards it merged.
 - Results are local, explainable keyword/context matches—not semantic understanding. Review the post before acting on a low-confidence result. You can add a local label of **Useful**, **Irrelevant**, or **False positive**; these labels are notes only and do not affect classifier signals.
-- The category selector filters the result list. The optional **Show selected matches in feed only** switch temporarily hides feed cards outside the selected category; incomplete or uncertain posts remain visible. Stop the monitor to restore the normal feed display.
+- The category selector filters the result list. Search and newest/oldest sorting are applied before pagination (25 posts per page). Each result can open a full-detail view on demand and, when a validated LinkedIn permalink exists, the original post in a new tab. The optional **Show selected matches in feed only** switch temporarily hides feed cards outside the selected category; incomplete or uncertain posts remain visible. Stop the monitor to restore the normal feed display.
 - A **DOM compatibility check** reports matched post cards and post-text selectors, fallback use, and visible “See more” controls. Detection recognizes article/role markers, LinkedIn feed view names, post URNs, common feed-card classes, and structurally plausible `role=listitem` cards with text, controls, and links; if the current `<main>` wrapper has no cards, it checks the page body as a fallback. It warns if no feed post cards match after repeated checks; LinkedIn may change its page structure.
 
-The monitor first reads complete post text already present in the page DOM. If full text is unavailable and a collapsed post’s “See more” control is visible, it can automatically activate that control while monitoring is on. It expands only when needed and retries the post text afterward; in the foreground it pauses an active scroller for safety. This is not a separate user-triggered expansion action. Auto-expansion can be disabled in the popup.
+The monitor first reads complete post text already present in the page DOM. If full text is unavailable and a collapsed post’s “See more” control is visible, it can automatically activate that control while monitoring is on. It expands only when needed, bounds retries, and verifies an observed body/control change. In the foreground it pauses an active scroller for safety; scrolling remains paused until you explicitly choose **Resume**. This is not a separate user-triggered expansion action. Auto-expansion can be disabled in the popup.
+
+## Accessible localized popup
+
+The popup includes locally shipped English, French, and Arabic dictionaries. Choose a language explicitly or use the browser’s automatic language; Arabic applies a right-to-left logical layout. No web fonts or translation services are requested. The Scroll and Hiring tabs support Left/Right Arrow, Home, and End keys with roving focus, and result refreshes preserve keyed rows and focused controls. Text, contrast, focus indicators, reduced motion, and narrow/zoomed layouts are covered by DOM checks.
+
+A short first-run panel explains local-only analysis, user controls, responsible use, and the absence of engagement actions or external AI calls. Dismissing it and changing language are saved locally; **Clear all local data** restores these fresh-install choices.
 
 ## Local export
 
-**Export JSON** or **Export CSV** is an explicit, user-triggered download that stays on your device; no post data is uploaded. Choose whether to export all categories or only the currently selected category, and choose which fields to include: full text, email addresses, job-title candidates, age/metrics, and author/links/hashtags metadata. JSON retains structured data; CSV uses a UTF-8 BOM for spreadsheet compatibility.
+**Export JSON** or **Export CSV** is an explicit, user-triggered download that stays on your device; no post data is uploaded. Choose whether to export all categories or only the currently selected category, and choose which fields to include: full text, email addresses, job-title candidates, age/metrics, and author/links/hashtags metadata. Full text and email fields are **off by default on fresh installs**; existing field preferences are preserved. JSON retains structured schema-v2 data; CSV uses a UTF-8 BOM, CRLF rows, and formula-neutralized cells for spreadsheet compatibility.
 
 Exports merge unique current-run records with any locally saved history. Available fields may include full post text and completeness, separated email addresses, heuristic job-title candidates, hashtags and links, post permalink/author, post age or publish time, reaction/comment/repost/view metrics, classifier category/confidence/score/evidence, and your review label. Unavailable age or engagement metrics are `null` in JSON and blank in CSV. Relative ages are approximate. Job-title candidates are export-only and are not classifier keywords.
 
@@ -36,7 +42,11 @@ Up to **1,000 unique detected records** are kept in memory per run. Stopping the
 
 ## Optional local history
 
-Local history is **off by default**. When enabled, detected post records (including text) are retained in Chrome local storage on this device, subject to the selected **7-, 30-, or 90-day** retention period and limits of **500 records / approximately 3 MB**. The default retention choice is 30 days when you turn it on. Turning history off stops new history saves but keeps already saved records until you choose **Clear saved history**; saved history remains exportable. Clearing history disables saving and removes the stored post-history records. Review labels are stored separately and are not removed by the history-clear control.
+Local history is **off by default**. Choose **Browser session only** for `chrome.storage.session` or **Persistent on this device** for `chrome.storage.local`. Changing modes never copies old records between stores. Active history follows the selected **7-, 30-, or 90-day** retention period and limits of **500 records / approximately 3 MB per store**. Exports combine both stores with provenance and preserve complete text during canonical-ID merges.
+
+Turning history off stops new saves but keeps already saved records until you choose **Clear saved history**; saved history remains exportable. Clearing history disables saving and removes post-history records from both stores while preserving review labels. **Clear all local data** separately removes history, preferences, review labels, target mappings, and diagnostics after confirmation. The history status shows combined record bytes and the last successful save, or an honest storage-read error.
+
+The optional sanitized diagnostic contains extension/browser/protocol versions, selector-health and operational counts, error categories, and scan timings. It excludes post text, emails, post/profile/tab URLs, and free-form selector/error messages; downloading it is explicit and local.
 
 ## Install (unpacked)
 
@@ -52,14 +62,25 @@ Local history is **off by default**. When enabled, detected post records (includ
 - `storage`: save preferences, the per-window selected feed tab, optional local post history, and review labels in Chrome local storage.
 - `https://www.linkedin.com/*`: run the scrolling controller and optional hiring monitor on LinkedIn.
 
-The extension makes no analytics or external service requests. Hiring results and the current run’s export archive are held in page memory; persistent post history is only saved when you opt in. Select **Stop hiring monitor** to stop scanning and restore any temporarily hidden feed cards. Scrolling and scanning continue in the selected hidden LinkedIn tab while it remains open, subject to Chrome background throttling. Human-like Super Fast locks pause-on-input on.
+The extension makes no analytics or external service requests. Hiring results and the current run’s export archive are held in page memory; persistent post history is only saved when you opt in. Select **Stop hiring monitor** to stop scanning and restore any temporarily hidden feed cards. Scrolling and scanning continue in the selected hidden LinkedIn tab while it remains open, subject to Chrome background throttling. Adaptive Super Fast locks pause-on-input on.
 
-Use responsibly and follow LinkedIn’s applicable terms and policies. LinkedIn may change its page structure or button labels, so DOM-dependent monitoring and expansion can require maintenance.
+Use responsibly and follow LinkedIn’s applicable terms and policies. LinkedIn may change its page structure or button labels, so DOM-dependent monitoring and expansion can require maintenance. See [`PRIVACY.md`](PRIVACY.md) for storage, retention, export, and deletion details.
+
+## Release status
+
+Version 2.0.0 is a release candidate, not a claim of store or LinkedIn approval. The original authoring sandbox had no Chrome executable, so the real-browser suite is **NOT RUN** there; CI requires it. Authenticated LinkedIn, real screen-reader/zoom, licensing, publisher, privacy-URL, and policy-review gates remain with the release owner. See [`docs/store/release-checklist.md`](docs/store/release-checklist.md).
 
 ## Development workflow (Superpowers)
 
 This repository includes a full in-repo installation of **[obra/superpowers](https://github.com/obra/superpowers)** (`v7.0.0`) configured across `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `opencode.json`, `.agents/skills/`, `.claude/skills/`, and `.agents/superpowers/`.
 
 - **Specs & plans:** `docs/superpowers/specs/` and `docs/superpowers/plans/` (see [`docs/superpowers/README.md`](docs/superpowers/README.md) for full workflow documentation).
+- **Install locked development tools:** `npm ci` (Node 22+)
+- **Run unit/integration/DOM/release tests:** `npm test`
 - **Verify Superpowers & extension integrity:** `bash scripts/verify-superpowers.sh`
-- **Build clean extension archive (`linkedin-feed-scroller.zip`):** `bash scripts/package-extension.sh`
+- **Run actual Chrome MV3 integration:** `npm run test:browser` (set `CHROME_PATH` when needed; unavailable Chrome is explicitly `NOT RUN`)
+- **Build deterministic directory-wrapped unpacked archive:** `bash scripts/package-extension.sh --unpacked /tmp/linkerter-unpacked.zip`
+- **Build deterministic manifest-at-root store archive:** `bash scripts/package-extension.sh --store /tmp/linkerter-store.zip`
+- The legacy `bash scripts/package-extension.sh /tmp/linkerter.zip` invocation still creates an unpacked archive. Both modes include only runtime files/icons and exclude tests, audits, documentation, and Superpowers tooling.
+
+Contribution, support, security, and release history are documented in [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SUPPORT.md`](SUPPORT.md), [`SECURITY.md`](SECURITY.md), and [`CHANGELOG.md`](CHANGELOG.md).

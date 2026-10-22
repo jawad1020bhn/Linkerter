@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sanitized Linkerter feed fixture</title>
+  <style>
+    body { margin: 0; font: 16px system-ui, sans-serif; background: #f2f6f8; color: #17283d; }
+    main { max-width: 680px; min-height: 1600px; margin: 24px auto; padding: 16px; }
+    article { padding: 20px; border: 1px solid #d4e0e7; border-radius: 12px; background: white; }
+    .fixture-note { color: #526373; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main role="main">
+    <p class="fixture-note">Synthetic local fixture — no LinkedIn account, tracking, or external resource.</p>
+    <article data-urn="urn:li:activity:{{POST_ID}}" aria-label="Synthetic hiring post">
+      <a class="update-components-actor__name" href="https://www.linkedin.com/company/linkerter-fixture/">Linkerter Fixture Employer</a>
+      <div class="feed-shared-text" dir="auto">We are hiring a browser integration engineer. Apply now. This is synthetic test content {{POST_ID}}.</div>
+      <time datetime="2026-10-20T12:00:00.000Z">1d</time>
+      <a class="update-components-text__permalink" href="https://www.linkedin.com/posts/linkerter_activity-{{POST_ID}}">Synthetic permalink</a>
+    </article>
+  </main>
+</body>
+</html>

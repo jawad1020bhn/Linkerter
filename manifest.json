@@ -1,8 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "LinkedIn Feed Scroller",
-  "version": "1.9.0",
-  "description": "LinkedIn feed popup with three adaptive human-like scroll modes and local multilingual hiring detection.",
+  "name": "Linkerter – Adaptive LinkedIn Feed",
+  "version": "2.0.0",
+  "minimum_chrome_version": "110",
+  "description": "Adaptive LinkedIn feed scrolling with local multilingual hiring detection, private history, and safe exports.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "permissions": [
     "activeTab",
     "storage"
@@ -11,15 +20,23 @@
     "https://www.linkedin.com/*"
   ],
   "action": {
-    "default_title": "Open LinkedIn Feed Scroller",
-    "default_popup": "popup.html"
+    "default_title": "Open Linkerter",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "content_scripts": [
     {
       "matches": [
-        "https://www.linkedin.com/*"
+        "https://www.linkedin.com/",
+        "https://www.linkedin.com/feed",
+        "https://www.linkedin.com/feed/*"
       ],
       "js": [
+        "linkedin-shared.js",
         "linkedin-hiring-rules.js",
         "linkedin-hiring-classifier.js",
         "linkedin-hiring-monitor.js",

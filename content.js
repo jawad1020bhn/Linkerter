@@ -4,22 +4,9 @@
   if (window.__linkedinFeedScrollerInstalled) return;
   window.__linkedinFeedScrollerInstalled = true;
 
-  const DEFAULTS = {
-    mode: "standard",
-    maxMinutes: 15,
-    maxSteps: 180,
-    pauseOnInput: true
-  };
-  const MODES = new Set(["standard", "fast", "super_fast"]);
-  const LEGACY_MODES = {
-    human: "standard",
-    natural: "standard",
-    steady: "standard",
-    gentle: "standard",
-    quick: "fast",
-    super_safe: "super_fast"
-  };
-  const ALLOWED_MINUTES = new Set([5, 15, 30, 60]);
+  const shared = globalThis.__LI_FEED_SHARED__;
+  if (!shared) throw new Error("Shared primitives must load before the feed scroller.");
+
   let session = null;
   let nextSessionId = 1;
 
@@ -29,26 +16,11 @@
   const scrollRoot = () => document.scrollingElement || document.documentElement;
 
   function sanitizeSettings(raw = {}) {
-    const requestedMode = LEGACY_MODES[raw.mode] || raw.mode;
-    const mode = MODES.has(requestedMode) ? requestedMode : DEFAULTS.mode;
-    const requestedMinutes = Number(raw.maxMinutes);
-    let maxMinutes = ALLOWED_MINUTES.has(requestedMinutes) ? requestedMinutes : DEFAULTS.maxMinutes;
-    let maxSteps = Math.round(clamp(Number(raw.maxSteps) || DEFAULTS.maxSteps, 20, 500));
-    let pauseOnInput = raw.pauseOnInput !== false;
-
-    if (mode === "super_fast") {
-      // Faster preset relaxes the old 4-second / 80-step limits, while retaining hard session caps.
-      maxMinutes = Math.min(maxMinutes, 15);
-      maxSteps = Math.min(maxSteps, 120);
-      pauseOnInput = true;
-    }
-
-    return { mode, maxMinutes, maxSteps, pauseOnInput };
+    return shared.sanitizeSettings(raw);
   }
 
   function isFeedPage() {
-    return location.hostname === "www.linkedin.com" &&
-      (location.pathname === "/" || /^\/feed(?:\/|$)/.test(location.pathname));
+    return shared.parseLinkedInUrl(location.href).isFeed;
   }
 
   function elapsedMs(current) {
@@ -556,8 +528,24 @@
     if (session && session.state === "running" && session.settings.pauseOnInput) pauseSession("Paused for your input.");
   }, { capture: true });
   window.addEventListener("li-feed-auto-expand-start", () => {
-    if (session && session.state === "running") pauseSession("Paused while a long post expands.");
+    if (session && session.state === "running") pauseSession("Paused while a long post expands. Manual resume is required to continue.");
   });
+
+  const scrollerApi = {
+    sanitizeSettings,
+    isFeedPage,
+    getStatus,
+    startSession,
+    pauseSession,
+    resumeSession,
+    stopSession,
+    runSession,
+    profileFor,
+    findScrollTarget,
+    smoothScrollBy
+  };
+  globalThis.__LI_FEED_SCROLLER__ = scrollerApi;
+  if (typeof module !== "undefined" && module.exports) module.exports = scrollerApi;
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== "string") return false;
