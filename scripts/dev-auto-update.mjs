@@ -23,7 +23,7 @@
  * Options:
  *   --repo <path>        Checkout to watch (default: this repository).
  *   --remote <name>      Git remote to follow (default: origin).
- *   --branch <name>      Branch to follow (default: the remote's default branch).
+ *   --branch <name>      Branch to follow (default: the checkout's current branch).
  *   --interval <seconds> Poll interval (default: 30).
  *   --once               Check once, then exit. Implies no polling.
  *   --no-pull            Only publish the current HEAD; never pull (for manual `git pull` workflows).
@@ -142,7 +142,12 @@ export async function runOnce({
   reloadTabs = true
 } = {}) {
   const root = await resolveRepo(repo);
-  const targetBranch = branch || (await defaultBranch(root, remote));
+  const checkedOut = await currentBranch(root);
+  // Default to the branch the checkout is actually on: development checkouts
+  // live on feature/session branches, and watching the remote default there
+  // would pause forever on the branch-mismatch guard below. Detached HEAD
+  // (no branch of its own) falls back to the remote's default branch.
+  const targetBranch = branch || (checkedOut && checkedOut !== "HEAD" ? checkedOut : await defaultBranch(root, remote));
   const local = await localHead(root);
 
   if (!pull) {
@@ -150,7 +155,6 @@ export async function runOnce({
     return { state: "up-to-date", commit: stamp.commit, local, branch: targetBranch, remote };
   }
 
-  const checkedOut = await currentBranch(root);
   if (checkedOut && checkedOut !== "HEAD" && checkedOut !== targetBranch) {
     return {
       state: "blocked",
@@ -274,7 +278,7 @@ function helpText() {
     "",
     "  --repo <path>         checkout to watch (default: this repository)",
     "  --remote <name>       git remote (default: origin)",
-    "  --branch <name>       branch to follow (default: remote default branch)",
+    "  --branch <name>       branch to follow (default: the checkout's current branch)",
     "  --interval <seconds>  poll interval (default: 30)",
     "  --once                check once and exit",
     "  --no-pull             publish the current HEAD only; never pull",
@@ -325,13 +329,12 @@ async function main() {
       process.exitCode = first.state === "missing-remote" ? 1 : 0;
       return;
     }
+    log(`watching ${settings.remote}/${first.branch} every ${options.interval}s — Ctrl+C to stop`, { force: true });
   } catch (error) {
     process.stderr.write(`Initial check failed: ${error.message}\n`);
     process.exitCode = 1;
     return;
   }
-
-  log(`watching ${settings.remote}/${settings.branch || "(default branch)"} every ${options.interval}s — Ctrl+C to stop`, { force: true });
 
   let running = false;
   const tick = async () => {

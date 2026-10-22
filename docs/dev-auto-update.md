@@ -25,7 +25,9 @@ npm run dev:auto-update
    commit actually differs from `HEAD`.
 2. **Fast-forward, never force** — the script checks
    `git status --porcelain --untracked-files=no` first, and it refuses to pull
-   when the checkout is on a different branch than the one it watches. If
+   when the checkout is on a different branch than the one it watches — which,
+   with the default above, only happens if you switch branches while the
+   watcher runs, or pin `--branch` to another branch on purpose. If
    tracked files have uncommitted changes, or the branches have diverged, it logs
    `update paused` and leaves your work untouched. Only a clean,
    fast-forwardable checkout of the watched branch is updated
@@ -47,7 +49,8 @@ npm run dev:auto-update -- [options]
 
   --repo <path>         checkout to watch (default: current directory)
   --remote <name>       git remote (default: origin)
-  --branch <name>       branch to follow (default: the remote's default branch)
+  --branch <name>       branch to follow (default: the checkout's current branch,
+                        or the remote's default branch when HEAD is detached)
   --interval <seconds>  poll interval, minimum 5 (default: 30)
   --once                check once and exit
   --no-pull             only publish the current HEAD; never pull
@@ -105,9 +108,10 @@ is running by the time you look at the extension again.
 | --- | --- | --- |
 | `update paused: … uncommitted changes` | Tracked files are modified | Commit, stash, or discard; the watcher retries every interval |
 | `update paused: local … has diverged` | Local commits not on the remote | Rebase or reset manually once; the watcher never rewrites history |
-| `update paused: this checkout is on "x" while watching "main"` | The working copy is on another branch | Check out the watched branch, or pass `--branch x` |
+| `update paused: this checkout is on "x" while watching "y"` | You switched branches while the watcher ran, or pinned `--branch y` on purpose | Restart the watcher (it follows the current branch by default), or check out `y` |
 | `no git remote named "origin"` | Remote missing or renamed | `--remote <name>` or add the remote |
 | `could not read … (offline?)` | Git could not reach GitHub | It keeps retrying; no state is changed |
+| `the remote has no branch "x"` | The watched branch was never pushed (typical right after a new feature/session branch is created) | Nothing to fix: the watcher retries every interval and picks the branch up as soon as it exists on the remote |
 | Chrome never reloads | The folder loaded in `chrome://extensions` is not this checkout, or the extension is not an unpacked load | Check the path on the extension card; Chrome must show **Developer mode** and “Loaded unpacked” |
 | Reload happens, but the LinkedIn tab keeps old behaviour | `--no-reload-tabs` was used, or no LinkedIn tab was open | Refresh the feed once, then leave the tab open |
 
