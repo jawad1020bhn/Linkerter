@@ -3,26 +3,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LinkedIn Feed Scroller</title>
   <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <!-- ── App bar: identity + live connection state ─────────────────── -->
-  <header class="app-header">
-    <div class="brand">
+</head><body>
+  <!-- ── Masthead: identity + live instruments, always visible ────── -->
+  <header class="masthead">
+    <div class="masthead-brand">
       <span class="brand-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.9-2.9a3.6 3.6 0 0 0-5.1-5.1l-1.3 1.3"></path>
           <path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.9 2.9a3.6 3.6 0 0 0 5.1 5.1l1.3-1.3"></path>
         </svg>
       </span>
-      <span class="brand-copy">
-        <h1 data-i18n="app.name">Feed Assistant</h1>
-      </span>
+      <h1 data-i18n="app.name">Feed Assistant</h1>
+      <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">CHECKING</span>
     </div>
-    <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">CHECKING</span>
+    <section class="instruments" aria-label="Session status" data-i18n-aria-label="status.section">
+      <span class="state-wrap">
+        <span id="stateDot" class="state-dot"></span>
+        <span id="stateLabel" class="state-label" data-i18n="scroll.ready">READY</span>
+      </span>
+      <span id="modeTag" class="mode-tag" data-i18n="mode.standard">Adaptive Standard</span>
+      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">NO FEED SELECTED</span>
+    </section>
+    <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="scroll.progress">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+    <p id="statusDetail" class="status-detail" data-i18n="scroll.statusReady">Ready to scroll the LinkedIn feed.</p>
   </header>
 
-  <main class="app-main">
-    <!-- ── First-run, local-privacy explainer (dismissed once) ──────── -->
+  <!-- ── Tab strip: horizontal destinations ───────────────────────── -->
+  <nav class="tabstrip" aria-label="Primary" data-i18n-aria-label="dock.section">
+    <div class="tabstrip-tabs" role="tablist" aria-label="Extension sections" data-i18n-aria-label="tabs.section">
+      <button id="scrollTab" class="tab active" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="scrollView">
+        <span class="tab-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4v13m0 0 4.5-4.5M12 17l-4.5-4.5"></path>
+            <path d="M5 20h14"></path>
+          </svg>
+        </span>
+        <span class="tab-label" data-i18n="tabs.scroll">Scroll</span>
+      </button>
+      <button id="hiringTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="hiringView">
+        <span class="tab-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.5" y="8" width="17" height="11.5" rx="2.5"></rect>
+            <path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8m-11.5 4.5h17"></path>
+          </svg>
+        </span>
+        <span class="tab-label" data-i18n="tabs.hiring">Hiring filter</span>
+        <span id="tabMatchCount" class="tab-count">0</span>
+      </button>
+    </div>
+    <button id="settingsToggle" class="settings-toggle" type="button" aria-expanded="false" aria-controls="settingsView" data-i18n-aria-label="settings.open" data-i18n-title="settings.open" aria-label="Open settings" title="Open settings">
+      <span class="tab-icon" aria-hidden="true">
+        <svg class="settings-gear" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.15"></circle>
+          <path d="M12 2.6a1.5 1.5 0 0 0-1.47 1.2l-.19.93a1.5 1.5 0 0 1-2.1 1.05l-.86-.4a1.5 1.5 0 0 0-1.83.42l-.66.83a1.5 1.5 0 0 0 .19 1.99l.7.62a1.5 1.5 0 0 1 0 2.28l-.7.62a1.5 1.5 0 0 0-.19 1.99l.66.83a1.5 1.5 0 0 0 1.83.42l.86-.4a1.5 1.5 0 0 1 2.1 1.05l.19.93a1.5 1.5 0 0 0 1.47 1.2h1.06a1.5 1.5 0 0 0 1.47-1.2l.19-.93a1.5 1.5 0 0 1 2.1-1.05l.86.4a1.5 1.5 0 0 0 1.83-.42l.66-.83a1.5 1.5 0 0 0-.19-1.99l-.7-.62a1.5 1.5 0 0 1 0-2.28l.7-.62a1.5 1.5 0 0 0 .19-1.99l-.66-.83a1.5 1.5 0 0 0-1.83-.42l-.86.4a1.5 1.5 0 0 1-2.1-1.05l-.19-.93A1.5 1.5 0 0 0 13.06 2.6Z"></path>
+        </svg>
+      </span>
+      <span class="tab-label" data-i18n="settings.nav">Settings</span>
+    </button>
+  </nav>
+
+  <!-- ── Workspace: the active task owns everything below the strip ── -->
+  <main class="workspace">
+    <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed to begin.</p>
+
+    <!-- First-run, local-privacy explainer (dismissed once) -->
     <section id="onboarding" class="onboarding" aria-labelledby="onboardingTitle">
       <h2 id="onboardingTitle" data-i18n="onboarding.title">Local, user-controlled assistance</h2>
       <p data-i18n="onboarding.body">Linkerter scrolls and analyzes only the selected feed. It does not like, comment, connect, message, upload posts, or use an external AI service.</p>
@@ -31,44 +77,24 @@
       <button id="onboardingDismiss" class="button button-secondary" type="button" data-i18n="onboarding.dismiss">Got it</button>
     </section>
 
-    <!-- ── Hero: live session status, always visible ───────────────── -->
-    <section class="status-card" aria-label="Session status" data-i18n-aria-label="status.section">
-      <div class="status-head">
-        <span class="state-wrap">
-          <span id="stateDot" class="state-dot"></span>
-          <span id="stateLabel" class="state-label" data-i18n="scroll.ready">READY</span>
-        </span>
-        <span id="modeTag" class="mode-tag" data-i18n="mode.standard">Adaptive Standard</span>
-      </div>
-      <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="scroll.progress">
-        <div id="progressFill" class="progress-fill"></div>
-      </div>
-      <p id="statusDetail" class="status-detail" data-i18n="scroll.statusReady">Ready to scroll the LinkedIn feed.</p>
-    </section>
-
-    <!-- ── Pinned feed target ──────────────────────────────────────── -->
-    <section class="target-card" aria-label="Monitored LinkedIn tab" data-i18n-aria-label="target.section">
-      <div class="target-heading">
-        <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">NO FEED SELECTED</span>
-        <span id="targetDetail" class="target-detail" data-i18n="target.detail">Choose a LinkedIn feed tab. The selected target is remembered when you reopen this popup.</span>
-      </div>
-      <div class="target-actions">
-        <button id="useActiveFeedBtn" class="button button-secondary" type="button" data-i18n="target.useActive">Use active feed tab</button>
-        <button id="returnToFeedBtn" class="button button-ghost" type="button" disabled="" data-i18n="target.return">Return to feed</button>
-      </div>
-    </section>
-
-    <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed to begin.</p>
-
-    <!-- ── Tab panel: scroll controls ──────────────────────────────── -->
+    <!-- Pane: run the scroller ─────────────────────────────────────── -->
     <section id="scrollView" class="view active" role="tabpanel" aria-labelledby="scrollTab">
-      <div class="scroll-controls" aria-label="Scrolling controls" data-i18n-aria-label="scroll.controls">
+      <section class="target-block" aria-label="Monitored LinkedIn tab" data-i18n-aria-label="target.section">
+        <p id="targetDetail" class="target-detail" data-i18n="target.detail">Choose a LinkedIn feed tab. The selected target is remembered when you reopen this popup.</p>
+        <div class="target-actions">
+          <button id="useActiveFeedBtn" class="button button-secondary" type="button" data-i18n="target.useActive">Use active feed tab</button>
+          <button id="returnToFeedBtn" class="button button-ghost" type="button" disabled="" data-i18n="target.return">Return to feed</button>
+        </div>
+      </section>
+
+      <div class="transport" aria-label="Scrolling controls" data-i18n-aria-label="scroll.controls">
         <button id="startBtn" class="button button-primary button-hero" type="button" disabled="" data-i18n="scroll.start">Start scrolling</button>
         <div class="segmented" role="group" aria-label="Pause or stop" data-i18n-aria-label="scroll.pauseStop">
           <button id="pauseBtn" class="button button-secondary" type="button" disabled="" data-i18n="scroll.pause">Pause</button>
           <button id="stopBtn" class="button button-stop" type="button" disabled="" data-i18n="scroll.stop">Stop</button>
         </div>
       </div>
+
       <div class="view-hint">
         <span class="view-hint-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -81,7 +107,7 @@
       </div>
     </section>
 
-    <!-- ── Tab panel: hiring monitor + results ─────────────────────── -->
+    <!-- Pane: hiring monitor + results ─────────────────────────────── -->
     <section id="hiringView" class="view" role="tabpanel" aria-labelledby="hiringTab" hidden="">
       <section class="panel detector-panel">
         <div class="panel-heading">
@@ -158,7 +184,7 @@
       </section>
     </section>
 
-    <!-- ── Settings: replaces both panels while open ───────────────── -->
+    <!-- Pane: settings — replaces both panels while open ───────────── -->
     <section id="settingsView" class="view settings-view" role="region" aria-labelledby="settingsViewTitle" hidden="">
       <div class="settings-head">
         <div class="panel-titles">
@@ -350,40 +376,6 @@
       <span data-i18n="footer.local">Local only</span>
     </footer>
   </main>
-
-  <!-- ── Bottom navigation dock ──────────────────────────────────── -->
-  <nav class="dock" aria-label="Primary" data-i18n-aria-label="dock.section">
-    <div class="dock-tabs" role="tablist" aria-label="Extension sections" data-i18n-aria-label="tabs.section">
-      <button id="scrollTab" class="tab active" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="scrollView">
-        <span class="tab-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 4v13m0 0 4.5-4.5M12 17l-4.5-4.5"></path>
-            <path d="M5 20h14"></path>
-          </svg>
-        </span>
-        <span class="tab-label" data-i18n="tabs.scroll">Scroll</span>
-      </button>
-      <button id="hiringTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="hiringView">
-        <span class="tab-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3.5" y="8" width="17" height="11.5" rx="2.5"></rect>
-            <path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8m-11.5 4.5h17"></path>
-          </svg>
-        </span>
-        <span class="tab-label" data-i18n="tabs.hiring">Hiring filter</span>
-        <span id="tabMatchCount" class="tab-count">0</span>
-      </button>
-    </div>
-    <button id="settingsToggle" class="settings-toggle" type="button" aria-expanded="false" aria-controls="settingsView" data-i18n-aria-label="settings.open" data-i18n-title="settings.open" aria-label="Open settings" title="Open settings">
-      <span class="tab-icon" aria-hidden="true">
-        <svg class="settings-gear" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3.15"></circle>
-          <path d="M12 2.6a1.5 1.5 0 0 0-1.47 1.2l-.19.93a1.5 1.5 0 0 1-2.1 1.05l-.86-.4a1.5 1.5 0 0 0-1.83.42l-.66.83a1.5 1.5 0 0 0 .19 1.99l.7.62a1.5 1.5 0 0 1 0 2.28l-.7.62a1.5 1.5 0 0 0-.19 1.99l.66.83a1.5 1.5 0 0 0 1.83.42l.86-.4a1.5 1.5 0 0 1 2.1 1.05l.19.93a1.5 1.5 0 0 0 1.47 1.2h1.06a1.5 1.5 0 0 0 1.47-1.2l.19-.93a1.5 1.5 0 0 1 2.1-1.05l.86.4a1.5 1.5 0 0 0 1.83-.42l.66-.83a1.5 1.5 0 0 0-.19-1.99l-.7-.62a1.5 1.5 0 0 1 0-2.28l.7-.62a1.5 1.5 0 0 0 .19-1.99l-.66-.83a1.5 1.5 0 0 0-1.83-.42l-.86.4a1.5 1.5 0 0 1-2.1-1.05l-.19-.93A1.5 1.5 0 0 0 13.06 2.6Z"></path>
-        </svg>
-      </span>
-      <span class="tab-label" data-i18n="settings.nav">Settings</span>
-    </button>
-  </nav>
 
   <script src="linkedin-shared.js"></script>
   <script src="popup-i18n.js"></script>
