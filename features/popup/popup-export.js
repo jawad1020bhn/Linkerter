@@ -4,6 +4,11 @@
   const shared = globalThis.__LI_FEED_SHARED__ || (typeof require === "function" ? require("../../core/linkedin-shared.js") : null);
   if (!shared) throw new Error("Shared primitives must load before export helpers.");
 
+  // The scoring ceilings belong to the classifier; these two numbers mirror its
+  // OPEN_SCORE_MAX/RECRUITER_SCORE_MAX for the case where the classifier global is absent
+  // (export helpers are unit-tested standalone). A rise in the real ceiling must change both.
+  const SCORE_MAX_FALLBACK = Object.freeze({ openScore: 15, recruiterScore: 10 });
+
   function migratePost(raw) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const fullText = String(raw.fullText ?? raw.text ?? raw.snippet ?? "");
@@ -303,8 +308,8 @@
       extractionNotes: options.extractionNotes || null,
       confidenceRank: { ...shared.CONFIDENCE_RANK },
       scoreBasis: {
-        openScore: { max: globalThis.__LI_FEED_HIRING_CLASSIFIER__?.OPEN_SCORE_MAX ?? 15 },
-        recruiterScore: { max: globalThis.__LI_FEED_HIRING_CLASSIFIER__?.RECRUITER_SCORE_MAX ?? 10 }
+        openScore: { max: globalThis.__LI_FEED_HIRING_CLASSIFIER__?.OPEN_SCORE_MAX ?? SCORE_MAX_FALLBACK.openScore },
+        recruiterScore: { max: globalThis.__LI_FEED_HIRING_CLASSIFIER__?.RECRUITER_SCORE_MAX ?? SCORE_MAX_FALLBACK.recruiterScore }
       },
       posts: projected
     };

@@ -326,10 +326,6 @@ h1, h2, h3, p {
   transition: transform 0.3s ease;
 }
 
-[dir="rtl"] .progress-fill {
-  transform-origin: right;
-}
-
 .status-detail {
   font-size: 12px;
   color: #9fb0bd;
@@ -1462,24 +1458,6 @@ input.select-control[type="search"] {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* ── RTL refinements ─────────────────────────────────────── */
-[dir="rtl"] .summary-chevron {
-  transform: rotate(-45deg);
-}
-
-[dir="rtl"] .settings-group[open] > summary .summary-chevron {
-  transform: rotate(135deg);
-}
-
-[dir="rtl"] .toggle-row input:checked + .switch::after {
-  transform: translateX(-16px);
-}
-
-[dir="rtl"] .match-snippet,
-[dir="rtl"] .detail-full-text {
-  text-align: right;
 }
 
 /* ── Pipeline: chips, delta, badges, row actions ──────────── */

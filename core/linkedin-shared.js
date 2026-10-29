@@ -75,9 +75,6 @@
   const MODES = new Set(["standard", "fast", "super_fast"]);
   const MINUTE_OPTIONS = new Set([5, 15, 30, 60]);
   const STEP_OPTIONS = new Set([40, 80, 120, 180, 300, 500]);
-  const TRACKING_PARAMS = new Set([
-    "trk", "trkinfo", "originalsubdomain", "lipi", "licu", "midtoken", "midsig", "eid", "otp"
-  ]);
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
