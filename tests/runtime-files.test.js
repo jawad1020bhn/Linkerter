@@ -7,6 +7,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
+// background.js resolves the shared message-type table at module scope, exactly as the
+// service worker does after importScripts. Node has no importScripts, so preload it.
+require(path.join(ROOT, "core", "linkedin-shared.js"));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"));
 const manifestContentScripts = manifest.content_scripts.flatMap((entry) => entry.js || []);
 const { FEED_CONTENT_SCRIPTS } = require(path.join(ROOT, "infrastructure", "background.js"));

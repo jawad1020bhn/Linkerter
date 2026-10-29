@@ -13,16 +13,16 @@
           <path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.9 2.9a3.6 3.6 0 0 0 5.1 5.1l1.3-1.3"></path>
         </svg>
       </span>
-      <h1 data-i18n="app.name">Feed Assistant</h1>
-      <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">CHECKING</span>
+      <h1 data-i18n="app.name">Linkerter</h1>
+      <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">Checking</span>
     </div>
     <section class="instruments" aria-label="Session status" data-i18n-aria-label="status.section">
       <span class="state-wrap">
         <span id="stateDot" class="state-dot"></span>
-        <span id="stateLabel" class="state-label" data-i18n="scroll.ready">READY</span>
+        <span id="stateLabel" class="state-label" data-i18n="scroll.ready">Ready</span>
       </span>
       <span id="modeTag" class="mode-tag" data-i18n="mode.standard">Adaptive Standard</span>
-      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">NO FEED SELECTED</span>
+      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">No feed selected</span>
     </section>
     <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="scroll.progress">
       <div id="progressFill" class="progress-fill"></div>
@@ -116,7 +116,7 @@
           </div>
           <span class="local-badge" data-i18n="detector.badge">NO AI</span>
         </div>
-        <p class="detector-copy" data-i18n="detector.copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French, and Arabic while it is in the background. Chrome may throttle hidden tabs, and the feed tab must stay open.</p>
+        <p class="detector-copy" data-i18n="detector.copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French, Arabic, Spanish, German, and Portuguese while it is in the background. Chrome may throttle hidden tabs, and the feed tab must stay open.</p>
         <button id="monitorBtn" class="button button-monitor" type="button" disabled="" data-i18n="monitor.start">Start hiring monitor</button>
         <p id="monitorStatus" class="monitor-status" role="status" data-i18n="monitor.off">Monitor is off.</p>
         <p id="domHealthStatus" class="dom-health" role="status" data-i18n="monitor.domPending">Feed DOM check pending.</p>
@@ -214,37 +214,6 @@
         <button id="settingsDoneBtn" class="button button-primary button-compact" type="button" data-i18n="settings.done">Done</button>
       </div>
 
-      <details class="settings-group" open="">
-        <summary>
-          <h3 id="settingsGeneralTitle" data-i18n="settings.general">General</h3>
-          <span class="summary-hint" data-i18n="settings.generalHelp">Language and interface preferences.</span>
-          <span class="summary-chevron" aria-hidden="true"></span>
-        </summary>
-        <div class="group-body">
-          <div class="field-row">
-            <label class="field-label" for="localeSelect" data-i18n="locale.label">Language</label>
-            <select id="localeSelect" class="select-control">
-              <option value="auto" data-i18n="locale.auto">Automatic</option>
-              <option value="en" data-i18n="locale.en">English</option>
-              <option value="fr" data-i18n="locale.fr">Français</option>
-              <option value="ar" data-i18n="locale.ar">العربية</option>
-              <option value="es" data-i18n="locale.es">Español</option>
-              <option value="de" data-i18n="locale.de">Deutsch</option>
-              <option value="pt" data-i18n="locale.pt">Português</option>
-            </select>
-          </div>
-          <div class="field-row">
-            <label class="field-label" for="themeSelect" data-i18n="theme.label">Appearance</label>
-            <select id="themeSelect" class="select-control">
-              <option value="auto" selected="" data-i18n="theme.auto">Match system</option>
-              <option value="light" data-i18n="theme.light">Light</option>
-              <option value="dark" data-i18n="theme.dark">Dark</option>
-            </select>
-          </div>
-          <p class="field-help" data-i18n="settings.appearanceHelp">Interface theme, language, and keyboard shortcuts.</p>
-        </div>
-      </details>
-
       <details class="settings-group">
         <summary>
           <h3 id="settingsCommandsTitle" data-i18n="commands.title">Keyboard shortcuts</h3>
@@ -273,7 +242,7 @@
       <details class="settings-group" open="">
         <summary>
           <h3 id="paceTitle" data-i18n="pace.title">Smart pacing</h3>
-          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">AUTO-ADAPTIVE</span>
+          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">Auto-adaptive</span>
           <span class="summary-chevron" aria-hidden="true"></span>
         </summary>
         <div class="group-body">
@@ -355,7 +324,7 @@
           <div class="field-row">
             <label class="field-label" for="historyMode" data-i18n="history.label">Save new post history</label>
             <select id="historyMode" class="select-control">
-              <option value="off" data-i18n="history.off">Off — do not save new posts</option>
+              <option value="off" data-i18n="history.off">Off, do not save new posts</option>
               <option value="session" data-i18n="history.session">Browser session only</option>
               <option value="persistent" data-i18n="history.persistent">Persistent on this device</option>
             </select>
@@ -375,7 +344,7 @@
               <button id="clearHistoryBtn" class="button button-secondary" type="button" disabled="" data-i18n="history.clear">Clear saved history</button>
             </div>
           </div>
-          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Local history is off.</p>
+          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Off. No post history is being saved.</p>
         </div>
       </details>
 
@@ -443,7 +412,6 @@
 
     <footer class="app-footer">
       <span data-i18n="footer.target">Selected feed stays pinned when you switch tabs</span>
-      <span class="footer-dot" aria-hidden="true">·</span>
       <span data-i18n="footer.local">Local only</span>
     </footer>
   </main>
@@ -454,7 +422,6 @@
   <script src="../../core/linkedin-hiring-classifier.js"></script>
   <script src="../feed-monitor/linkedin-post-extract.js"></script>
   <script src="popup-i18n.js"></script>
-  <script src="popup-locales.js"></script>
   <script src="popup-store.js"></script>
   <script src="popup-export.js"></script>
   <script src="popup-results.js"></script>

@@ -7,8 +7,9 @@
 A zero-dependency Chrome MV3 extension that scrolls the LinkedIn feed at a
 human-comfortable pace and, while it does, classifies posts locally for hiring
 signals (openings, recruiter searches, job seekers, closed positions) in
-English, French and Arabic. Everything is processed and stored on-device: no
-remote code, no telemetry, no network calls beyond the tab the user is viewing.
+English, French, Arabic, Spanish, German and Portuguese. Everything is processed
+and stored on-device: no remote code, no telemetry, no network calls beyond the
+tab the user is viewing.
 
 ## Files
 
@@ -22,7 +23,7 @@ remote code, no telemetry, no network calls beyond the tab the user is viewing.
 | `features/feed-monitor/linkedin-hiring-monitor.js` | Feed scanner orchestration: post roots, expansion, metrics, filtering, export archive |
 | `features/feed-monitor/content.js` | Adaptive scroll session controller |
 | `infrastructure/background.js` | Service worker: history coordination, SPA feed injection |
-| `features/popup/` | Popup UI with localization (en/fr/ar), export and diagnostics |
+| `features/popup/` | Popup UI (English-only), export and diagnostics |
 | `scripts/` | Packaging (Node, no Python) and the popup preview harness |
 | `tests/` | Zero-dependency `node:test` suite |
 
@@ -53,15 +54,13 @@ Every content module has a re-entrancy guard, so double injection is harmless.
 
 ```bash
 npm run package                              # linkedin-feed-scroller.zip
-npm run package:store                        # store variant
 node scripts/package-extension.cjs out.zip   # explicit output path
 ```
 
-The packager is Node-only (no bash or Python), so it runs unchanged on Windows. The
-`scripts/package-extension.sh` wrapper is kept for existing invocations and simply
-delegates to it. The script writes only files referenced by `manifest.json` (plus the
-popup) into a deterministic, runtime-only archive; dev working files under `scripts/`
-and `tests/` never ship.
+The packager is Node-only (no bash or Python), so it runs unchanged on Windows.
+The script writes only files referenced by `manifest.json` (plus the popup) into a
+deterministic, runtime-only archive; dev working files under `scripts/` and `tests/`
+never ship.
 
 ## Privacy
 

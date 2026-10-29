@@ -20,15 +20,6 @@
     "email", "emailLink", "contactCues", "jobLink", "hashtag"
   ]);
   const HISTORY_MODES = new Set(["off", "session", "persistent"]);
-  const ERROR_CODES = Object.freeze({
-    STORAGE_UNAVAILABLE: "storage_unavailable",
-    QUOTA_EXCEEDED: "quota_exceeded",
-    INVALID_DATA: "invalid_data",
-    TAB_UNAVAILABLE: "tab_unavailable",
-    HISTORY_DISABLED: "history_disabled",
-    HISTORY_LIMIT: "history_limit",
-    NOT_FOUND: "not_found"
-  });
 
   // Single source of truth for history capacity so background and shared pruning
   // cannot drift apart (bug: the background re-declared its own limits).
@@ -37,15 +28,6 @@
     maxBytes: 3_000_000
   });
 
-  class LinkerterError extends Error {
-    constructor(code, message, cause) {
-      super(message || code);
-      this.name = "LinkerterError";
-      this.code = code;
-      if (cause) this.cause = cause;
-    }
-  }
-
   const DEFAULT_SETTINGS = Object.freeze({
     mode: "standard",
     maxMinutes: 15,
@@ -53,10 +35,6 @@
     pauseOnInput: true
   });
 
-  // Locales the popup and the classifier rule tables ship translations for. "auto" is a
-  // preference value, not a locale: sanitizeLocale keeps it and detectLocale never returns it.
-  const SUPPORTED_LOCALES = Object.freeze(["en", "fr", "ar", "es", "de", "pt"]);
-  const THEMES = Object.freeze(["auto", "light", "dark"]);
   // A post is "new" when the monitor first saw it after the previous run started. The
   // pipeline is the user's private saved/applied tracker; neither value affects detection.
   const PIPELINE_STATES = Object.freeze(["saved", "applied"]);
@@ -64,11 +42,12 @@
   const PIPELINE_LIMIT = 2000;
   const EXPORT_FORMATS = Object.freeze(["json", "csv", "html", "markdown"]);
 
+  // The interface ships English-only with a light theme, so preferences no longer carry
+  // locale or theme fields; stored values from older versions are ignored.
   const DEFAULT_HIRING_PREFS = Object.freeze({
     autoExpand: true,
     filter: "all",
     pipelineFilter: "all",
-    theme: "auto",
     matchesOnly: false,
     exportFormat: "json",
     compactJson: false,
@@ -82,7 +61,6 @@
     keepHistory: false,
     historyMode: "off",
     historyRetentionDays: 30,
-    locale: "auto",
     onboardingSeen: false
   });
 
@@ -97,9 +75,56 @@
   const MODES = new Set(["standard", "fast", "super_fast"]);
   const MINUTE_OPTIONS = new Set([5, 15, 30, 60]);
   const STEP_OPTIONS = new Set([40, 80, 120, 180, 300, 500]);
-  const TRACKING_PARAMS = new Set([
-    "trk", "trkinfo", "originalsubdomain", "lipi", "licu", "midtoken", "midsig", "eid", "otp"
-  ]);
+
+  /**
+   * Every chrome.runtime/tabs message type, grouped by the context that handles it.
+   *
+   * The popup, the content scripts and the service worker are three separate processes
+   * exchanging these strings, and a typo in any one of them fails silently: the sender gets
+   * a "no handler" rejection or a dropped response rather than a compile error. Keeping the
+   * names here — in a module every context already loads — makes the wire contract a single
+   * citable list. tests/messages.test.js cross-checks the handlers against this table.
+   */
+  const MESSAGE_TYPES = Object.freeze({
+    // features/feed-monitor/content.js — adaptive scroll session.
+    SCROLL: Object.freeze({
+      GET_STATUS: "GET_STATUS",
+      START: "START",
+      PAUSE: "PAUSE",
+      RESUME: "RESUME",
+      STOP: "STOP"
+    }),
+    // features/feed-monitor/linkedin-hiring-monitor.js — hiring detection.
+    HIRING: Object.freeze({
+      GET_STATUS: "GET_HIRING_STATUS",
+      GET_POST: "GET_HIRING_POST",
+      EXPORT_POSTS: "EXPORT_HIRING_POSTS",
+      START: "START_HIRING_MONITOR",
+      STOP: "STOP_HIRING_MONITOR",
+      SET_OPTIONS: "SET_HIRING_OPTIONS",
+      SET_FILTER: "SET_HIRING_FILTER",
+      SET_PIPELINE: "SET_HIRING_PIPELINE"
+    }),
+    // infrastructure/background.js — history coordination and diagnostics.
+    HISTORY: Object.freeze({
+      GET: "HISTORY_GET",
+      STATUS: "HISTORY_STATUS",
+      APPEND: "HISTORY_APPEND",
+      DELTA: "HISTORY_DELTA",
+      FLUSH: "HISTORY_FLUSH",
+      SET_MODE: "HISTORY_SET_MODE",
+      CLEAR: "HISTORY_CLEAR"
+    }),
+    DATA: Object.freeze({
+      LOCAL_DATA_CLEAR: "LOCAL_DATA_CLEAR",
+      GET_DIAGNOSTICS: "GET_DIAGNOSTICS"
+    })
+  });
+
+  /** Flat list of every wire type, for exhaustiveness checks and message-type allowlists. */
+  const ALL_MESSAGE_TYPES = Object.freeze(
+    Object.values(MESSAGE_TYPES).flatMap((group) => Object.values(group))
+  );
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -138,7 +163,6 @@
       autoExpand: source.autoExpand !== false,
       filter: FILTERS.includes(source.filter) ? source.filter : "all",
       pipelineFilter: PIPELINE_FILTERS.includes(source.pipelineFilter) ? source.pipelineFilter : "all",
-      theme: THEMES.includes(source.theme) ? source.theme : "auto",
       matchesOnly: source.matchesOnly === true,
       exportFormat: EXPORT_FORMATS.includes(source.exportFormat) ? source.exportFormat : "json",
       exportFilteredOnly: source.exportFilteredOnly === true,
@@ -156,7 +180,6 @@
       keepHistory: requestedMode === "persistent",
       historyMode: requestedMode,
       historyRetentionDays: [7, 30, 90].includes(retention) ? retention : 30,
-      locale: SUPPORTED_LOCALES.includes(source.locale) || source.locale === "auto" ? source.locale : "auto",
       onboardingSeen: source.onboardingSeen === true
     };
   }
@@ -420,27 +443,6 @@
     return counts;
   }
 
-  // ── Locale and theme resolution ──────────────────────────────────
-
-  function sanitizeLocale(requested) {
-    const value = String(requested || "");
-    if (value === "auto") return "auto";
-    if (SUPPORTED_LOCALES.includes(value)) return value;
-    const base = value.toLowerCase().split(/[-_]/)[0];
-    return SUPPORTED_LOCALES.includes(base) ? base : "auto";
-  }
-
-  function detectLocale(language) {
-    const base = String(language || "en").toLowerCase().split(/[-_]/)[0];
-    return SUPPORTED_LOCALES.includes(base) ? base : "en";
-  }
-
-  function resolveTheme(requested, prefersDark) {
-    const theme = THEMES.includes(requested) ? requested : "auto";
-    if (theme === "auto") return prefersDark ? "dark" : "light";
-    return theme;
-  }
-
   const api = {
     SCHEMA_VERSION,
     MESSAGE_SCHEMA_VERSION,
@@ -448,17 +450,15 @@
     FILTERS,
     CONFIDENCE_RANK,
     EXPORT_SIGNAL_KEYS,
-    ERROR_CODES,
     HISTORY_LIMITS,
-    SUPPORTED_LOCALES,
-    THEMES,
     PIPELINE_STATES,
     PIPELINE_FILTERS,
     PIPELINE_LIMIT,
     EXPORT_FORMATS,
-    LinkerterError,
     DEFAULT_SETTINGS,
     DEFAULT_HIRING_PREFS,
+    MESSAGE_TYPES,
+    ALL_MESSAGE_TYPES,
     sanitizeSettings,
     sanitizeHiringPreferences,
     parseLinkedInUrl,
@@ -476,10 +476,7 @@
     sanitizePipeline,
     setPipelineState,
     applyPipelineFilter,
-    pipelineCounts,
-    sanitizeLocale,
-    detectLocale,
-    resolveTheme
+    pipelineCounts
   };
   globalThis.__LI_FEED_SHARED__ = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

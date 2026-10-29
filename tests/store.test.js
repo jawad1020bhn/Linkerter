@@ -48,24 +48,24 @@ test("sanitizeStoredPreferences merges defaults and honours legacy flags", () =>
   const legacy = store.sanitizeStoredPreferences({ keepHistory: true, includeMetrics: false });
   assert.equal(legacy.historyMode, "persistent");
   assert.equal(legacy.includePostAge, false, "schema-2 includeMetrics fed the age toggle");
-  assert.equal(legacy.locale, "auto");
-  assert.equal(legacy.theme, "auto");
   assert.equal(legacy.pipelineFilter, "all");
 
   const modern = store.sanitizeStoredPreferences({
-    locale: "pt-BR", theme: "dark", pipelineFilter: "applied", filter: "closed",
+    pipelineFilter: "applied", filter: "closed",
     historyMode: "session", exportFormat: "markdown"
   });
-  assert.equal(modern.locale, "pt");
-  assert.equal(modern.theme, "dark");
   assert.equal(modern.pipelineFilter, "applied");
   assert.equal(modern.filter, "closed");
   assert.equal(modern.historyMode, "session");
   assert.equal(modern.exportFormat, "markdown");
 
-  const junk = store.sanitizeStoredPreferences({ locale: "ja", theme: "neon", pipelineFilter: "x", filter: "x", historyMode: "x" });
-  assert.equal(junk.locale, "auto");
-  assert.equal(junk.theme, "auto");
+  // Locale and theme are gone from the preference shape: even a store written by an
+  // older build must not reintroduce them.
+  const withRemovedFields = store.sanitizeStoredPreferences({ locale: "pt-BR", theme: "dark" });
+  assert.equal(Object.hasOwn(withRemovedFields, "locale"), false);
+  assert.equal(Object.hasOwn(withRemovedFields, "theme"), false);
+
+  const junk = store.sanitizeStoredPreferences({ pipelineFilter: "x", filter: "x", historyMode: "x" });
   assert.equal(junk.pipelineFilter, "all");
   assert.equal(junk.filter, "all");
   assert.equal(junk.historyMode, "off");
@@ -97,8 +97,6 @@ test("describeDelta reports the new-since-last-run count only when there is a ba
     { count: 0, hasBaseline: true });
 });
 
-test("the store re-exports the shared pipeline and locale rules", () => {
+test("the store re-exports the shared pipeline rules", () => {
   assert.equal(store.PIPELINE_LIMIT, shared.PIPELINE_LIMIT);
-  assert.equal(store.SUPPORTED_LOCALES, shared.SUPPORTED_LOCALES);
-  assert.equal(store.resolveTheme, shared.resolveTheme);
 });

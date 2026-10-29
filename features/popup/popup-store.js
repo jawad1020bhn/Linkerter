@@ -5,9 +5,9 @@
    * Popup store: state shaping that does not touch the DOM or chrome.*.
    *
    * Everything here is a pure function so the popup controller can stay an event/render
-   * shell and the rules can be unit-tested without a browser. The canonical pipeline and
-   * locale semantics live in core/linkedin-shared.js because the feed monitor needs the
-   * same answers; this module adds the popup's own view models on top of them.
+   * shell and the rules can be unit-tested without a browser. The canonical pipeline
+   * semantics live in core/linkedin-shared.js because the feed monitor needs the same
+   * answers; this module adds the popup's own view models on top of them.
    */
 
   const shared = globalThis.__LI_FEED_SHARED__ ||
@@ -51,14 +51,12 @@
   /**
    * One place that turns whatever is in storage into the preference object the popup
    * renders. Legacy `keepHistory`/`includeMetrics` handling stays in the shared sanitizer;
-   * this only adds the popup-specific coercions (locale base tags, pipeline view).
+   * this only adds the popup-specific coercion for the pipeline view.
    */
   function sanitizeStoredPreferences(raw = {}) {
     const preferences = shared.sanitizeHiringPreferences(raw);
     return {
       ...preferences,
-      locale: shared.sanitizeLocale(raw && raw.locale),
-      theme: shared.THEMES.includes(raw && raw.theme) ? raw.theme : "auto",
       pipelineFilter: shared.PIPELINE_FILTERS.includes(raw && raw.pipelineFilter) ? raw.pipelineFilter : "all"
     };
   }
@@ -103,9 +101,7 @@
     nextPipelineState,
     pipelineChips,
     describeDelta,
-    PIPELINE_LIMIT: shared.PIPELINE_LIMIT,
-    SUPPORTED_LOCALES: shared.SUPPORTED_LOCALES,
-    resolveTheme: shared.resolveTheme
+    PIPELINE_LIMIT: shared.PIPELINE_LIMIT
   };
   globalThis.__LI_FEED_POPUP_STORE__ = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

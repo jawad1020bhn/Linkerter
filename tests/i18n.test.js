@@ -6,11 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const i18n = require("../features/popup/popup-i18n.js");
-require("../features/popup/popup-locales.js");
-const { dictionaries } = i18n;
 const html = fs.readFileSync(path.resolve(__dirname, "../features/popup/popup.html"), "utf8");
-
-const LOCALES = ["en", "fr", "ar", "es", "de", "pt"];
 
 function htmlKeys() {
   const keys = new Set();
@@ -19,47 +15,43 @@ function htmlKeys() {
   return keys;
 }
 
-test("every locale defines exactly the same keys", () => {
-  const english = Object.keys(dictionaries.en).sort();
-  assert.ok(english.length > 250, `expected a full dictionary, found ${english.length} keys`);
-  for (const locale of LOCALES.slice(1)) {
-    assert.deepEqual(Object.keys(dictionaries[locale]).sort(), english, `${locale} key parity`);
-  }
+test("the interface is English-only, left-to-right", () => {
+  assert.equal(i18n.locale, "en");
+  assert.equal(i18n.direction, "ltr");
 });
 
-test("every key used by popup.html exists in every locale", () => {
+test("the dictionary is a full English table", () => {
+  const count = Object.keys(i18n.dictionary).length;
+  assert.ok(count > 250, `expected a full dictionary, found ${count} keys`);
+});
+
+test("every key used by popup.html exists in the dictionary", () => {
   const used = htmlKeys();
   assert.ok(used.size > 100, `expected the popup to use many keys, found ${used.size}`);
-  for (const locale of LOCALES) {
-    const missing = [...used].filter((key) => !Object.hasOwn(dictionaries[locale], key));
-    assert.deepEqual(missing, [], `${locale} is missing popup keys`);
-  }
+  const missing = [...used].filter((key) => !Object.hasOwn(i18n.dictionary, key));
+  assert.deepEqual(missing, [], "missing popup keys");
 });
 
-test("Spanish, German and Portuguese translate the whole interface, not just inherit English", () => {
-  const english = dictionaries.en;
-  for (const locale of ["es", "de", "pt"]) {
-    const translated = Object.entries(dictionaries[locale])
-      .filter(([key, value]) => english[key] !== value && !key.startsWith("locale.") && key !== "app.name");
-    assert.ok(translated.length > 200,
-      `${locale} should translate most keys, only ${translated.length} differ from English`);
+// The markup carries its own English so the popup still reads correctly before applyStrings
+// runs. That copy is a second place strings live, so it drifted silently before: the header
+// still said "Feed Assistant" and the detector note listed three of the six post languages.
+test("inline HTML fallbacks match the dictionary", () => {
+  const normalize = (value) => value.replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  const drifted = [];
+  for (const match of html.matchAll(/data-i18n="([^"]+)"([^>]*)>([^<]*)</g)) {
+    const [, key, attributes, fallback] = match;
+    if (!Object.hasOwn(i18n.dictionary, key)) continue;
+    // A data-i18n-count option shows its concrete number ("15 minutes"), not the template.
+    if (/data-i18n-count/.test(attributes)) continue;
+    if (normalize(fallback) !== normalize(i18n.dictionary[key])) drifted.push(key);
   }
-  // Spot-check a few strings that a machine placeholder would leave in English.
-  assert.match(dictionaries.es["scroll.start"], /Empezar/);
-  assert.match(dictionaries.de["scroll.start"], /Scrollen starten/);
-  assert.match(dictionaries.pt["scroll.start"], /Começar/);
+  assert.deepEqual(drifted, [], "inline fallbacks drifted from the dictionary");
 });
 
 test("t substitutes placeholders and falls back to the key name", () => {
-  i18n.setLocale("en");
   assert.equal(i18n.t("time.minutes", { count: 5 }), "5 minutes");
-  assert.equal(i18n.t("results.page", { page: 2, count: 40 }), "Page 2 · 40 results");
-  i18n.setLocale("es");
-  assert.equal(i18n.t("time.minutes", { count: 5 }), "5 minutos");
-  i18n.setLocale("de");
-  assert.equal(i18n.t("time.minutes", { count: 5 }), "5 Minuten");
-  i18n.setLocale("pt");
-  assert.equal(i18n.t("time.minutes", { count: 5 }), "5 minutos");
+  assert.equal(i18n.t("results.page", { page: 2, count: 40 }), "Page 2, 40 results");
+  assert.equal(i18n.t("time.minutes", {}), "{count} minutes", "unknown placeholders pass through");
   const warn = console.warn;
   console.warn = () => {};
   try {
@@ -67,33 +59,4 @@ test("t substitutes placeholders and falls back to the key name", () => {
   } finally {
     console.warn = warn;
   }
-});
-
-test("setLocale accepts every supported locale, rejects unknown ones and reports direction", () => {
-  for (const locale of LOCALES) assert.equal(i18n.setLocale(locale), locale);
-  assert.equal(i18n.setLocale("ar"), "ar");
-  assert.equal(i18n.direction, "rtl");
-  assert.equal(i18n.setLocale("fr"), "fr");
-  assert.equal(i18n.direction, "ltr");
-  assert.equal(i18n.setLocale("ja"), "en");
-  assert.ok(LOCALES.includes(i18n.setLocale("auto")), "auto resolves to a supported locale");
-});
-
-test("registerLocale refuses malformed codes and inherits missing English keys", () => {
-  assert.equal(i18n.registerLocale("xx", { "scroll.start": "Custom" }), true);
-  i18n.setLocale("xx");
-  assert.equal(i18n.t("scroll.start"), "Custom");
-  assert.equal(i18n.t("scroll.stop"), "Stop", "untranslated keys fall back to English");
-  assert.equal(i18n.registerLocale("toolong", {}), false);
-  assert.equal(i18n.registerLocale("", {}), false);
-  assert.equal(i18n.registerLocale("yy", null), false);
-  delete dictionaries.xx;
-});
-
-test("Arabic translations actually differ from English", () => {
-  i18n.setLocale("ar");
-  const arabic = i18n.t("scroll.start");
-  i18n.setLocale("en");
-  assert.notEqual(arabic, i18n.t("scroll.start"));
-  assert.match(arabic, /[\u0600-\u06FF]/, "Arabic string contains Arabic script");
 });

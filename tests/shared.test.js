@@ -237,26 +237,11 @@ test("pipelineCounts and applyPipelineFilter agree on every view", () => {
   assert.deepEqual(ids("nonsense"), ["urn:1", "urn:2", "urn:3", "urn:4", "urn:5"]);
 });
 
-test("the supported locale set includes Spanish, German and Portuguese", () => {
-  assert.deepEqual([...shared.SUPPORTED_LOCALES], ["en", "fr", "ar", "es", "de", "pt"]);
-  assert.equal(shared.sanitizeLocale("es"), "es");
-  assert.equal(shared.sanitizeLocale("de"), "de");
-  assert.equal(shared.sanitizeLocale("pt-BR"), "pt");
-  assert.equal(shared.sanitizeLocale("auto"), "auto");
-  assert.equal(shared.sanitizeLocale("ja"), "auto");
-  assert.equal(shared.detectLocale("es-419"), "es");
-  assert.equal(shared.detectLocale("de-AT"), "de");
-  assert.equal(shared.detectLocale("pt-PT"), "pt");
-  assert.equal(shared.detectLocale("fr-CA"), "fr");
-  assert.equal(shared.detectLocale("ja-JP"), "en");
-});
-
-test("resolveTheme turns auto into the system preference and rejects junk", () => {
-  assert.equal(shared.resolveTheme("auto", true), "dark");
-  assert.equal(shared.resolveTheme("auto", false), "light");
-  assert.equal(shared.resolveTheme("dark", false), "dark");
-  assert.equal(shared.resolveTheme("light", true), "light");
-  assert.equal(shared.resolveTheme("neon", true), "dark");
+test("preferences no longer carry locale or theme fields", () => {
+  const prefs = shared.sanitizeHiringPreferences({ locale: "fr", theme: "dark", filter: "possible" });
+  assert.equal(Object.hasOwn(prefs, "locale"), false);
+  assert.equal(Object.hasOwn(prefs, "theme"), false);
+  assert.equal(prefs.filter, "possible", "unrelated preferences still sanitize");
 });
 
 test("utf8ByteLength counts characters, not UTF-16 code units", () => {

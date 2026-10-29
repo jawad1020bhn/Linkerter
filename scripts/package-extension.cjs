@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-/* Build deterministic, runtime-only Chrome Extension MV3 archives.
+/* Build a deterministic, runtime-only Chrome Extension MV3 archive.
  *
  *   node scripts/package-extension.cjs              -> linkedin-feed-scroller.zip
- *   node scripts/package-extension.cjs --store      -> linkedin-feed-scroller-store.zip
  *   node scripts/package-extension.cjs out.zip
  *
  * The archive contains only files the manifest (plus the popup's own script/style
  * references) needs at runtime; development files under scripts/ and tests/ never ship.
  * It is byte-identical across runs and machines: fixed timestamps, fixed permissions,
- * sorted entry names and a single deflate level.
+ * sorted entry names and a single deflate level. The extension is installed unpacked or
+ * sideloaded locally, so there is no store-upload variant.
  *
  * This replaces the previous bash + python3 implementation, which needed a Python 3
  * interpreter that Windows does not ship by default.
@@ -21,10 +21,7 @@ const zlib = require("node:zlib");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const PREFIX = "linkedin-feed-scroller/";
-const DEFAULT_OUTPUT = {
-  unpacked: "linkedin-feed-scroller.zip",
-  store: "linkedin-feed-scroller-store.zip"
-};
+const DEFAULT_OUTPUT = "linkedin-feed-scroller.zip";
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -109,7 +106,7 @@ function dosDateTime() {
 }
 
 /** Build the ZIP in memory. `prefix` is prepended to every entry name. */
-function buildArchiveBuffer({ root = REPO_ROOT, files, prefix = "" }) {
+function buildArchiveBuffer({ root = REPO_ROOT, files, prefix = PREFIX }) {
   const entries = (files || collectRuntimeFiles(root)).map((file) => {
     const safe = assertSafePath(file);
     const data = fs.readFileSync(path.join(root, safe));
@@ -180,32 +177,28 @@ function buildArchiveBuffer({ root = REPO_ROOT, files, prefix = "" }) {
   return Buffer.concat([...localParts, centralDirectory, end]);
 }
 
-function buildArchive({ root = REPO_ROOT, out, mode = "unpacked" }) {
-  if (!Object.hasOwn(DEFAULT_OUTPUT, mode)) throw new Error(`Unknown packaging mode: ${mode}`);
+function buildArchive({ root = REPO_ROOT, out } = {}) {
   const files = collectRuntimeFiles(root);
-  const prefix = mode === "unpacked" ? PREFIX : "";
-  const buffer = buildArchiveBuffer({ root, files, prefix });
-  const target = path.resolve(out || path.join(root, DEFAULT_OUTPUT[mode]));
+  const buffer = buildArchiveBuffer({ root, files });
+  const target = path.resolve(out || path.join(root, DEFAULT_OUTPUT));
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, buffer);
-  return { out: target, files: files.length, mode, bytes: buffer.length };
+  return { out: target, files: files.length, bytes: buffer.length };
 }
 
 function usage() {
-  return "Usage: node scripts/package-extension.cjs [--unpacked|--store] [output.zip]";
+  return "Usage: node scripts/package-extension.cjs [output.zip]";
 }
 
 function main(argv = [], root = REPO_ROOT) {
   const args = [...argv];
-  let mode = "unpacked";
-  if (args[0] === "--unpacked" || args[0] === "--store") mode = args.shift().slice(2);
   if ((args[0] && args[0].startsWith("--")) || args.length > 1) {
     process.stderr.write(`${usage()}\n`);
     return 2;
   }
   try {
-    const result = buildArchive({ root, out: args[0], mode });
-    process.stdout.write(`Wrote ${result.out} (${result.files} files, ${result.mode}, deterministic)\n`);
+    const result = buildArchive({ root, out: args[0] });
+    process.stdout.write(`Wrote ${result.out} (${result.files} files, deterministic)\n`);
     return 0;
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

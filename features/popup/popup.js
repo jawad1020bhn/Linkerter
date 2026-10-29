@@ -53,8 +53,6 @@ const elements = {
   hiringView: $("#hiringView"),
   settingsView: $("#settingsView"),
   connectionChip: $("#connectionChip"),
-  localeSelect: $("#localeSelect"),
-  themeSelect: $("#themeSelect"),
   pipelineChips: $("#pipelineChips"),
   pipelineDelta: $("#pipelineDelta"),
   shortcutsBtn: $("#shortcutsBtn"),
@@ -228,21 +226,11 @@ function updateSettingLabels() {
   elements.safeBadge.textContent = t(mode === "super_fast" ? "pace.locked" : "pace.smart");
 }
 
-const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
-
-function applyTheme() {
-  const theme = shared.resolveTheme(hiringPrefs.theme, Boolean(darkQuery?.matches));
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-}
-
-function applyPopupLocale() {
-  const requested = hiringPrefs.locale === "auto" || shared.SUPPORTED_LOCALES.includes(hiringPrefs.locale)
-    ? hiringPrefs.locale
-    : "auto";
-  i18n.setLocale(requested);
-  i18n.applyLocale(document);
-  elements.localeSelect.value = requested;
+// The popup is English-only with a light palette: there is nothing to resolve at
+// runtime, but the static string pass also rewrites dynamic labels, so the live status
+// surfaces are re-rendered from the last known state right after it.
+function applyInterfaceStrings() {
+  i18n.applyStrings(document);
   elements.onboarding.hidden = Boolean(hiringPrefs.onboardingSeen);
   updateSettingLabels();
   if (hiringStatus) renderHiringStatus(hiringStatus);
@@ -250,9 +238,6 @@ function applyPopupLocale() {
     elements.monitorBtn.textContent = t("monitor.start");
     elements.pageStatus.textContent = t("results.page", { page: resultQuery.page, count: 0 });
   }
-  // applyLocale rewrites every [data-i18n] node with its static placeholder, which also
-  // clobbers the live masthead, notice and button labels. Re-render from the last status
-  // so a language change never leaves a running session looking stopped.
   if (scrollStatus) renderScrollStatus(scrollStatus);
   renderHistoryStatus();
 }
@@ -268,7 +253,6 @@ function readHiringPrefs() {
     autoExpand: elements.autoExpand.checked,
     filter: FILTERS.includes(elements.categoryFilter.value) ? elements.categoryFilter.value : "all",
     pipelineFilter: shared.PIPELINE_FILTERS.includes(resultQuery.pipelineFilter) ? resultQuery.pipelineFilter : "all",
-    theme: shared.THEMES.includes(elements.themeSelect.value) ? elements.themeSelect.value : "auto",
     matchesOnly: elements.matchesOnly.checked,
     exportFormat: format,
     exportFilteredOnly: elements.exportFilteredOnly.checked,
@@ -282,9 +266,6 @@ function readHiringPrefs() {
     historyMode: ["off", "session", "persistent"].includes(elements.historyMode.value) ? elements.historyMode.value : "off",
     keepHistory: elements.historyMode.value !== "off",
     historyRetentionDays: [7, 30, 90].includes(requestedRetention) ? requestedRetention : 30,
-    locale: elements.localeSelect.value === "auto" || shared.SUPPORTED_LOCALES.includes(elements.localeSelect.value)
-      ? elements.localeSelect.value
-      : "auto",
     onboardingSeen: Boolean(hiringPrefs?.onboardingSeen)
   };
 }
@@ -318,29 +299,12 @@ function setGlobalNotice(message, kind = "") {
   elements.globalNotice.className = `global-notice${kind ? ` ${kind}` : ""}`;
 }
 
-const REVIEW_LABELS = new Set(["useful", "irrelevant", "false_positive"]);
-
-function sanitizeHistory(raw) {
-  return (Array.isArray(raw) ? raw : [])
-    .filter((record) => record && typeof record === "object" && (record.id || record.permalink))
-    .sort((a, b) => Date.parse(b.lastSeenAt || b.firstSeenAt || "") - Date.parse(a.lastSeenAt || a.firstSeenAt || ""))
-    .slice(0, 1000);
-}
-
-function sanitizeReviewLabels(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return new Map();
-  const entries = [];
-  for (const [id, value] of Object.entries(raw)) {
-    const label = typeof value === "string" ? value : value?.label;
-    if (!id || !REVIEW_LABELS.has(label)) continue;
-    const updatedAt = value && typeof value === "object" && Number.isFinite(Date.parse(value.updatedAt))
-      ? Date.parse(value.updatedAt)
-      : 0;
-    entries.push([id.slice(0, 180), { label, updatedAt: new Date(updatedAt || Date.now()).toISOString() }]);
-  }
-  entries.sort((a, b) => Date.parse(a[1].updatedAt) - Date.parse(b[1].updatedAt));
-  return new Map(entries.slice(-1000));
-}
+// The store module owns the review-label vocabulary and the history/review caps. The popup
+// used to carry its own copies of these sanitizers with a hardcoded 1000, so a label list or
+// limit change could silently apply on one storage path and not the other.
+const REVIEW_LABELS = new Set(store.REVIEW_LABELS);
+const sanitizeHistory = store.sanitizeHistory;
+const sanitizeReviewLabels = store.sanitizeReviewLabels;
 
 async function persistReviewLabels() {
   const stored = Object.fromEntries(reviewLabels.entries());
@@ -364,15 +328,15 @@ function renderHistoryStatus() {
     message = t("history.offStatus");
   }
   if (savedHistoryStats.error) {
-    message += ` · ${t("history.unavailable")}`;
+    message += `, ${t("history.unavailable")}`;
   } else {
-    message += ` · ${t("history.usage", { bytes: Number(savedHistoryStats.bytes) || 0 })}`;
+    message += `, ${t("history.usage", { bytes: Number(savedHistoryStats.bytes) || 0 })}`;
     const savedAt = Date.parse(savedHistoryStats.lastSuccessfulSaveAt || "");
     if (Number.isFinite(savedAt)) {
       let formatted = savedHistoryStats.lastSuccessfulSaveAt;
       try { formatted = new Intl.DateTimeFormat(i18n.locale, { dateStyle: "short", timeStyle: "short" }).format(new Date(savedAt)); } catch (_error) { /* ISO fallback remains readable. */ }
-      message += ` · ${t("history.lastSave", { time: formatted })}`;
-    } else message += ` · ${t("history.noSave")}`;
+      message += `, ${t("history.lastSave", { time: formatted })}`;
+    } else message += `, ${t("history.noSave")}`;
   }
   elements.historyStatus.textContent = message;
   elements.clearHistoryBtn.disabled = count === 0;
@@ -453,8 +417,8 @@ async function setTargetTab(tabId, windowId, stopPrevious = true) {
     targetWindowId = windowId;
   }
   if (stopPrevious && Number.isInteger(previousTabId) && previousTabId !== tabId) {
-    try { await chrome.tabs.sendMessage(previousTabId, { type: "STOP_HIRING_MONITOR" }); } catch (_error) { /* Old target may have closed. */ }
-    try { await chrome.tabs.sendMessage(previousTabId, { type: "STOP" }); } catch (_error) { /* Old target may have closed. */ }
+    try { await chrome.tabs.sendMessage(previousTabId, { type: shared.MESSAGE_TYPES.HIRING.STOP }); } catch (_error) { /* Old target may have closed. */ }
+    try { await chrome.tabs.sendMessage(previousTabId, { type: shared.MESSAGE_TYPES.SCROLL.STOP }); } catch (_error) { /* Old target may have closed. */ }
   }
   await writeTargetForWindow(windowId, tabId);
   if (targetTabId === tabId) renderTargetState();
@@ -471,7 +435,7 @@ async function chooseActiveFeedTab(tab = null, quiet = false) {
     return false;
   }
   try {
-    const status = await chrome.tabs.sendMessage(current.id, { type: "GET_STATUS" });
+    const status = await chrome.tabs.sendMessage(current.id, { type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS });
     if (!status?.isFeed) {
       if (!quiet) setGlobalNotice(t("notice.openFeedExact"));
       return false;
@@ -530,7 +494,7 @@ async function initializeTarget() {
         if (rememberedTab.windowId !== windowId || !isLinkedInFeedUrl(rememberedTab.url)) {
           throw new Error("Remembered target moved or left the feed.");
         }
-        const status = await chrome.tabs.sendMessage(rememberedId, { type: "GET_STATUS" });
+        const status = await chrome.tabs.sendMessage(rememberedId, { type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS });
         if (status?.isFeed) await setTargetTab(rememberedId, windowId, false);
         else await writeTargetForWindow(windowId, null);
       } catch (_error) {
@@ -649,7 +613,7 @@ function renderPipelineBar(counts) {
 
 async function notifyPipeline(generation = stateGeneration) {
   const response = await sendToTargetTab({
-    type: "SET_HIRING_PIPELINE",
+    type: shared.MESSAGE_TYPES.HIRING.SET_PIPELINE,
     pipeline,
     baselineAt: pipelineBaselineAt,
     filter: resultQuery.pipelineFilter
@@ -727,7 +691,7 @@ async function updateReviewLabel(key, label) {
   if (!key) return;
   if (REVIEW_LABELS.has(label)) {
     reviewLabels.set(key, { label, updatedAt: new Date().toISOString() });
-    if (reviewLabels.size > 1000) {
+    if (reviewLabels.size > store.REVIEW_LIMIT) {
       const oldest = Array.from(reviewLabels.entries()).sort((a, b) => Date.parse(a[1].updatedAt) - Date.parse(b[1].updatedAt))[0];
       if (oldest) reviewLabels.delete(oldest[0]);
     }
@@ -745,7 +709,7 @@ async function showPostDetail(id) {
   const generation = stateGeneration;
   elements.postDetail.hidden = false;
   elements.postDetail.textContent = t("results.detailLoading");
-  const response = await sendToTargetTab({ type: "GET_HIRING_POST", id }, { generation });
+  const response = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.GET_POST, id }, { generation });
   if (request !== detailGeneration || generation !== stateGeneration) return;
   if (!response?.post) {
     elements.postDetail.hidden = true;
@@ -775,7 +739,7 @@ function renderHiringStatus(status) {
   elements.monitorStatus.textContent = monitoring
     ? t("monitor.running", { count: processedCount })
     : processedCount > 0 ? t("monitor.stopped", { count: processedCount }) : t("monitor.off");
-  if (duplicates) elements.monitorStatus.textContent += ` · ${t("monitor.duplicates", { count: duplicates })}`;
+  if (duplicates) elements.monitorStatus.textContent += `, ${t("monitor.duplicates", { count: duplicates })}`;
   elements.monitorStatus.className = `monitor-status${monitoring ? " running" : ""}`;
 
   const domHealth = status.domHealth || {};
@@ -837,7 +801,7 @@ function renderHiringStatus(status) {
 }
 
 async function refreshScrollStatus(generation = stateGeneration, commandGeneration = null) {
-  const status = await sendToTargetTab({ type: "GET_STATUS" }, { generation });
+  const status = await sendToTargetTab({ type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS }, { generation });
   if (status && generation === stateGeneration && (commandGeneration === null || commandGeneration === scrollGeneration)) {
     renderScrollStatus(status);
   }
@@ -845,7 +809,7 @@ async function refreshScrollStatus(generation = stateGeneration, commandGenerati
 
 async function refreshSavedHistory(generation = stateGeneration) {
   try {
-    const response = await chrome.runtime.sendMessage({ type: "HISTORY_GET" });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.HISTORY.GET });
     if (generation !== stateGeneration) return;
     if (response?.error) {
       savedHistoryStats = { ...savedHistoryStats, error: response.error };
@@ -873,7 +837,7 @@ async function refreshHiringStatus(generation = stateGeneration) {
   const query = { ...resultQuery };
   // History was polled on the 1.3 s refresh loop too; the storage.onChanged listener and
   // the one-time init already cover history updates, so only the live status is fetched.
-  const status = await sendToTargetTab({ type: "GET_HIRING_STATUS", query }, { generation });
+  const status = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.GET_STATUS, query }, { generation });
   if (status && generation === stateGeneration) renderHiringStatus(status);
 }
 
@@ -920,12 +884,12 @@ async function runScrollCommand(type) {
   let commandGeneration = null;
   try {
     commandGeneration = ++scrollGeneration;
-    if (type === "START") {
+    if (type === shared.MESSAGE_TYPES.SCROLL.START) {
       await saveSettings();
       if (commandGeneration !== scrollGeneration || generation !== stateGeneration) return;
       setGlobalNotice(t("scroll.starting"));
     }
-    const message = type === "START" ? { type, settings: readSettings() } : { type };
+    const message = type === shared.MESSAGE_TYPES.SCROLL.START ? { type, settings: readSettings() } : { type };
     const response = await sendToTargetTab(message, { generation });
     if (!response || commandGeneration !== scrollGeneration || generation !== stateGeneration) return;
     if (response.error) {
@@ -960,8 +924,8 @@ async function runMonitorCommand() {
     if (!isRunning) await saveHiringPrefs();
     if (generation !== stateGeneration) return;
     const response = await sendToTargetTab(isRunning
-      ? { type: "STOP_HIRING_MONITOR" }
-      : { type: "START_HIRING_MONITOR", options: monitorOptions() }, { generation });
+      ? { type: shared.MESSAGE_TYPES.HIRING.STOP }
+      : { type: shared.MESSAGE_TYPES.HIRING.START, options: monitorOptions() }, { generation });
     if (!response || generation !== stateGeneration) return;
     if (response.error) {
       setGlobalNotice(noticeForError(response), "error");
@@ -983,7 +947,7 @@ async function updateMonitorPreferences() {
     if (generation !== stateGeneration) return;
     renderHistoryStatus();
     if (hiringStatus?.monitoring && available && isFeed) {
-      await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() }, { generation });
+      await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.SET_OPTIONS, options: monitorOptions() }, { generation });
     }
     await refreshAll();
   } catch (_error) {
@@ -1017,14 +981,14 @@ async function clearLocalHistory() {
   if (!window.confirm(t("clear.historyConfirm"))) return;
   elements.clearHistoryBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: "LOCAL_DATA_CLEAR", scopes: ["history"] });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.DATA.LOCAL_DATA_CLEAR, scopes: ["history"] });
     if (response?.error) throw new Error(response.error);
     elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
     hiringPrefs = { ...hiringPrefs, historyMode: "off" };
     await saveHiringPrefs();
     if (hiringStatus?.monitoring && available && isFeed) {
-      const statusResponse = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
+      const statusResponse = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.SET_OPTIONS, options: monitorOptions() });
       if (statusResponse?.status) renderHiringStatus(statusResponse.status);
     }
     savedHistory = [];
@@ -1042,7 +1006,7 @@ async function clearAllStoredData() {
   if (!window.confirm(t("clear.allConfirm"))) return;
   elements.clearAllDataBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: "LOCAL_DATA_CLEAR", scopes: ["all"] });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.DATA.LOCAL_DATA_CLEAR, scopes: ["all"] });
     if (response?.error) throw new Error(response.error);
     stateGeneration += 1;
     detailGeneration += 1;
@@ -1058,7 +1022,7 @@ async function clearAllStoredData() {
     resetPopupForm();
     renderTargetState();
     renderHiringStatus({ supported: false, isFeed: false, monitoring: false, counts: {}, processedCount: 0, archiveCount: 0 });
-    applyPopupLocale();
+    applyInterfaceStrings();
     elements.exportStatus.textContent = t("clear.allDone");
     setGlobalNotice(t("clear.allDone"), "success");
   } catch (_error) {
@@ -1077,9 +1041,9 @@ async function exportHiringPosts() {
     await saveHiringPrefs();
     if (generation !== stateGeneration) return;
     let currentRun = null;
-    if (available && isFeed) currentRun = await sendToTargetTab({ type: "EXPORT_HIRING_POSTS" }, { generation });
+    if (available && isFeed) currentRun = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.EXPORT_POSTS }, { generation });
     if (generation !== stateGeneration) return;
-    const historyResponse = await chrome.runtime.sendMessage({ type: "HISTORY_GET" });
+    const historyResponse = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.HISTORY.GET });
     if (generation !== stateGeneration) return;
     if (historyResponse?.error) throw new Error(historyResponse.error);
     savedHistory = sanitizeHistory(historyResponse?.records || []);
@@ -1097,7 +1061,7 @@ async function exportHiringPosts() {
     const totalAvailable = posts.length;
     const exportOptions = {
       preferences,
-      locale: i18n.locale || (preferences.locale === "auto" ? "en" : preferences.locale),
+      locale: i18n.locale,
       scope: selectedCategory !== "all"
         ? `Posts from the selected category: ${selectedCategory}.`
         : "All detected posts available from the current run and local history.",
@@ -1151,7 +1115,7 @@ async function exportHiringPosts() {
 async function downloadLocalDiagnostic() {
   elements.diagnosticBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: "GET_DIAGNOSTICS" });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.DATA.GET_DIAGNOSTICS });
     if (response?.error) throw new Error(response.error);
     const status = hiringStatus || {};
     const browserVersion = String(globalThis.navigator?.userAgent || "").match(/Chrome\/([0-9.]+)/)?.[1] || "unknown";
@@ -1262,9 +1226,7 @@ async function initialize() {
     hiringPrefs = { ...DEFAULT_HIRING_PREFS, ...(stored.hiringPreferences || {}) };
     if (!FILTERS.includes(hiringPrefs.filter)) hiringPrefs.filter = "all";
     if (!shared.PIPELINE_FILTERS.includes(hiringPrefs.pipelineFilter)) hiringPrefs.pipelineFilter = "all";
-    if (!shared.THEMES.includes(hiringPrefs.theme)) hiringPrefs.theme = "auto";
     if (!["json", "csv", "html", "markdown"].includes(hiringPrefs.exportFormat)) hiringPrefs.exportFormat = "json";
-    if (!["auto", ...shared.SUPPORTED_LOCALES].includes(hiringPrefs.locale)) hiringPrefs.locale = "auto";
     hiringPrefs.onboardingSeen = hiringPrefs.onboardingSeen === true;
     if (![7, 30, 90].includes(Number(hiringPrefs.historyRetentionDays))) hiringPrefs.historyRetentionDays = 30;
     if (!["off", "session", "persistent"].includes(hiringPrefs.historyMode)) {
@@ -1283,7 +1245,6 @@ async function initialize() {
     elements.categoryFilter.value = hiringPrefs.filter;
     resultQuery.filter = hiringPrefs.filter;
     resultQuery.pipelineFilter = hiringPrefs.pipelineFilter;
-    elements.themeSelect.value = hiringPrefs.theme;
     elements.resultSearch.value = resultQuery.search;
     elements.resultSort.value = resultQuery.sort;
     elements.matchesOnly.checked = Boolean(hiringPrefs.matchesOnly);
@@ -1311,9 +1272,8 @@ async function initialize() {
     pipelineBaselineAt = null;
     resetPopupForm();
   }
-  applyTheme();
   await loadShortcuts();
-  applyPopupLocale();
+  applyInterfaceStrings();
   await refreshSavedHistory();
 
   elements.mode.addEventListener("change", () => { applySafetyModeConstraints(); queueSaveSettings(); });
@@ -1325,17 +1285,6 @@ async function initialize() {
   elements.stop.addEventListener("click", () => void runScrollCommand("STOP"));
   elements.monitorBtn.addEventListener("click", () => void runMonitorCommand());
   elements.exportBtn.addEventListener("click", () => void exportHiringPosts());
-  elements.localeSelect.addEventListener("change", () => {
-    hiringPrefs.locale = elements.localeSelect.value;
-    applyPopupLocale();
-    void saveHiringPrefs().catch(() => setGlobalNotice(t("settings.saveFailed"), "error"));
-  });
-  elements.themeSelect.addEventListener("change", () => {
-    hiringPrefs.theme = shared.THEMES.includes(elements.themeSelect.value) ? elements.themeSelect.value : "auto";
-    applyTheme();
-    void saveHiringPrefs().catch(() => setGlobalNotice(t("settings.saveFailed"), "error"));
-  });
-  darkQuery?.addEventListener?.("change", applyTheme);
   elements.pipelineChips.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-pipeline-filter]");
     if (chip) void setPipelineFilter(chip.getAttribute("data-pipeline-filter"));
@@ -1419,7 +1368,7 @@ async function initialize() {
       await saveHiringPrefs();
       if (generation !== stateGeneration) return;
       if (hiringStatus?.monitoring && available && isFeed) {
-        await sendToTargetTab({ type: "SET_HIRING_FILTER", filter: resultQuery.filter, matchesOnly: elements.matchesOnly.checked }, { generation });
+        await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.SET_FILTER, filter: resultQuery.filter, matchesOnly: elements.matchesOnly.checked }, { generation });
       }
       await refreshAll();
     } catch (_error) {

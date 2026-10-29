@@ -176,7 +176,7 @@
   let monitoring = true;
 
   // The popup keeps pipeline marks in chrome.storage.local and the monitor caches them; the
-  // preview mirrors that contract so screenshots show the same chips, badges and counts.
+  // preview mirrors that contract so it shows the same chips, badges and counts.
   function pipelineSnapshot() {
     const data = localArea.data;
     const states = data.hiringPipeline && typeof data.hiringPipeline === "object" ? data.hiringPipeline : {};
@@ -283,9 +283,7 @@
       historyRetentionDays: 30,
       filter: "all",
       pipelineFilter: "all",
-      sort: "relevance",
-      locale: "en",
-      theme: "light"
+      sort: "relevance"
     },
     // Two posts were already triaged in an earlier session; the rest are untouched.
     hiringPipeline: {
