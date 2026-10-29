@@ -14,15 +14,15 @@
         </svg>
       </span>
       <h1 data-i18n="app.name">Linkerter</h1>
-      <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">CHECKING</span>
+      <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">Checking</span>
     </div>
     <section class="instruments" aria-label="Session status" data-i18n-aria-label="status.section">
       <span class="state-wrap">
         <span id="stateDot" class="state-dot"></span>
-        <span id="stateLabel" class="state-label" data-i18n="scroll.ready">READY</span>
+        <span id="stateLabel" class="state-label" data-i18n="scroll.ready">Ready</span>
       </span>
       <span id="modeTag" class="mode-tag" data-i18n="mode.standard">Adaptive Standard</span>
-      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">NO FEED SELECTED</span>
+      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">No feed selected</span>
     </section>
     <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="scroll.progress">
       <div id="progressFill" class="progress-fill"></div>
@@ -242,7 +242,7 @@
       <details class="settings-group" open="">
         <summary>
           <h3 id="paceTitle" data-i18n="pace.title">Smart pacing</h3>
-          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">AUTO-ADAPTIVE</span>
+          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">Auto-adaptive</span>
           <span class="summary-chevron" aria-hidden="true"></span>
         </summary>
         <div class="group-body">
@@ -324,7 +324,7 @@
           <div class="field-row">
             <label class="field-label" for="historyMode" data-i18n="history.label">Save new post history</label>
             <select id="historyMode" class="select-control">
-              <option value="off" data-i18n="history.off">Off — do not save new posts</option>
+              <option value="off" data-i18n="history.off">Off, do not save new posts</option>
               <option value="session" data-i18n="history.session">Browser session only</option>
               <option value="persistent" data-i18n="history.persistent">Persistent on this device</option>
             </select>
@@ -344,7 +344,7 @@
               <button id="clearHistoryBtn" class="button button-secondary" type="button" disabled="" data-i18n="history.clear">Clear saved history</button>
             </div>
           </div>
-          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Off · no post history is being saved.</p>
+          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Off. No post history is being saved.</p>
         </div>
       </details>
 
@@ -412,7 +412,6 @@
 
     <footer class="app-footer">
       <span data-i18n="footer.target">Selected feed stays pinned when you switch tabs</span>
-      <span class="footer-dot" aria-hidden="true">·</span>
       <span data-i18n="footer.local">Local only</span>
     </footer>
   </main>

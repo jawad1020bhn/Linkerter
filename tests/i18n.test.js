@@ -50,7 +50,7 @@ test("inline HTML fallbacks match the dictionary", () => {
 
 test("t substitutes placeholders and falls back to the key name", () => {
   assert.equal(i18n.t("time.minutes", { count: 5 }), "5 minutes");
-  assert.equal(i18n.t("results.page", { page: 2, count: 40 }), "Page 2 · 40 results");
+  assert.equal(i18n.t("results.page", { page: 2, count: 40 }), "Page 2, 40 results");
   assert.equal(i18n.t("time.minutes", {}), "{count} minutes", "unknown placeholders pass through");
   const warn = console.warn;
   console.warn = () => {};

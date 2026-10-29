@@ -328,15 +328,15 @@ function renderHistoryStatus() {
     message = t("history.offStatus");
   }
   if (savedHistoryStats.error) {
-    message += ` · ${t("history.unavailable")}`;
+    message += `, ${t("history.unavailable")}`;
   } else {
-    message += ` · ${t("history.usage", { bytes: Number(savedHistoryStats.bytes) || 0 })}`;
+    message += `, ${t("history.usage", { bytes: Number(savedHistoryStats.bytes) || 0 })}`;
     const savedAt = Date.parse(savedHistoryStats.lastSuccessfulSaveAt || "");
     if (Number.isFinite(savedAt)) {
       let formatted = savedHistoryStats.lastSuccessfulSaveAt;
       try { formatted = new Intl.DateTimeFormat(i18n.locale, { dateStyle: "short", timeStyle: "short" }).format(new Date(savedAt)); } catch (_error) { /* ISO fallback remains readable. */ }
-      message += ` · ${t("history.lastSave", { time: formatted })}`;
-    } else message += ` · ${t("history.noSave")}`;
+      message += `, ${t("history.lastSave", { time: formatted })}`;
+    } else message += `, ${t("history.noSave")}`;
   }
   elements.historyStatus.textContent = message;
   elements.clearHistoryBtn.disabled = count === 0;
@@ -739,7 +739,7 @@ function renderHiringStatus(status) {
   elements.monitorStatus.textContent = monitoring
     ? t("monitor.running", { count: processedCount })
     : processedCount > 0 ? t("monitor.stopped", { count: processedCount }) : t("monitor.off");
-  if (duplicates) elements.monitorStatus.textContent += ` · ${t("monitor.duplicates", { count: duplicates })}`;
+  if (duplicates) elements.monitorStatus.textContent += `, ${t("monitor.duplicates", { count: duplicates })}`;
   elements.monitorStatus.className = `monitor-status${monitoring ? " running" : ""}`;
 
   const domHealth = status.domHealth || {};

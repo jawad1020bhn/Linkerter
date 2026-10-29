@@ -117,7 +117,7 @@
     setText(confidence, partial ? t("review.partial") : t(confidenceKey));
     setText(item.querySelector(".match-snippet"), post.snippet || post.fullText || t("results.noPreview"));
     setText(item.querySelector(".match-evidence"), Array.isArray(post.evidence) && post.evidence.length
-      ? t("results.signals", { signals: post.evidence.join(" · ") })
+      ? t("results.signals", { signals: post.evidence.join(", ") })
       : t("results.lowConfidence"));
 
     let partialNote = item.querySelector(".partial-note");
@@ -287,7 +287,7 @@
     const evidence = documentRef.createElement("p");
     evidence.className = "detail-evidence";
     evidence.textContent = Array.isArray(post?.evidence) && post.evidence.length
-      ? t("results.signals", { signals: post.evidence.join(" · ") })
+      ? t("results.signals", { signals: post.evidence.join(", ") })
       : t("results.lowConfidence");
     const metrics = documentRef.createElement("p");
     metrics.className = "detail-metrics";
