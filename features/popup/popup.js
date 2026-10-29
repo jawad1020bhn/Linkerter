@@ -299,29 +299,12 @@ function setGlobalNotice(message, kind = "") {
   elements.globalNotice.className = `global-notice${kind ? ` ${kind}` : ""}`;
 }
 
-const REVIEW_LABELS = new Set(["useful", "irrelevant", "false_positive"]);
-
-function sanitizeHistory(raw) {
-  return (Array.isArray(raw) ? raw : [])
-    .filter((record) => record && typeof record === "object" && (record.id || record.permalink))
-    .sort((a, b) => Date.parse(b.lastSeenAt || b.firstSeenAt || "") - Date.parse(a.lastSeenAt || a.firstSeenAt || ""))
-    .slice(0, 1000);
-}
-
-function sanitizeReviewLabels(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return new Map();
-  const entries = [];
-  for (const [id, value] of Object.entries(raw)) {
-    const label = typeof value === "string" ? value : value?.label;
-    if (!id || !REVIEW_LABELS.has(label)) continue;
-    const updatedAt = value && typeof value === "object" && Number.isFinite(Date.parse(value.updatedAt))
-      ? Date.parse(value.updatedAt)
-      : 0;
-    entries.push([id.slice(0, 180), { label, updatedAt: new Date(updatedAt || Date.now()).toISOString() }]);
-  }
-  entries.sort((a, b) => Date.parse(a[1].updatedAt) - Date.parse(b[1].updatedAt));
-  return new Map(entries.slice(-1000));
-}
+// The store module owns the review-label vocabulary and the history/review caps. The popup
+// used to carry its own copies of these sanitizers with a hardcoded 1000, so a label list or
+// limit change could silently apply on one storage path and not the other.
+const REVIEW_LABELS = new Set(store.REVIEW_LABELS);
+const sanitizeHistory = store.sanitizeHistory;
+const sanitizeReviewLabels = store.sanitizeReviewLabels;
 
 async function persistReviewLabels() {
   const stored = Object.fromEntries(reviewLabels.entries());
@@ -708,7 +691,7 @@ async function updateReviewLabel(key, label) {
   if (!key) return;
   if (REVIEW_LABELS.has(label)) {
     reviewLabels.set(key, { label, updatedAt: new Date().toISOString() });
-    if (reviewLabels.size > 1000) {
+    if (reviewLabels.size > store.REVIEW_LIMIT) {
       const oldest = Array.from(reviewLabels.entries()).sort((a, b) => Date.parse(a[1].updatedAt) - Date.parse(b[1].updatedAt))[0];
       if (oldest) reviewLabels.delete(oldest[0]);
     }
