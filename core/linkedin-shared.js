@@ -53,10 +53,6 @@
     pauseOnInput: true
   });
 
-  // Locales the popup and the classifier rule tables ship translations for. "auto" is a
-  // preference value, not a locale: sanitizeLocale keeps it and detectLocale never returns it.
-  const SUPPORTED_LOCALES = Object.freeze(["en", "fr", "ar", "es", "de", "pt"]);
-  const THEMES = Object.freeze(["auto", "light", "dark"]);
   // A post is "new" when the monitor first saw it after the previous run started. The
   // pipeline is the user's private saved/applied tracker; neither value affects detection.
   const PIPELINE_STATES = Object.freeze(["saved", "applied"]);
@@ -64,11 +60,12 @@
   const PIPELINE_LIMIT = 2000;
   const EXPORT_FORMATS = Object.freeze(["json", "csv", "html", "markdown"]);
 
+  // The interface ships English-only with a light theme, so preferences no longer carry
+  // locale or theme fields; stored values from older versions are ignored.
   const DEFAULT_HIRING_PREFS = Object.freeze({
     autoExpand: true,
     filter: "all",
     pipelineFilter: "all",
-    theme: "auto",
     matchesOnly: false,
     exportFormat: "json",
     compactJson: false,
@@ -82,7 +79,6 @@
     keepHistory: false,
     historyMode: "off",
     historyRetentionDays: 30,
-    locale: "auto",
     onboardingSeen: false
   });
 
@@ -138,7 +134,6 @@
       autoExpand: source.autoExpand !== false,
       filter: FILTERS.includes(source.filter) ? source.filter : "all",
       pipelineFilter: PIPELINE_FILTERS.includes(source.pipelineFilter) ? source.pipelineFilter : "all",
-      theme: THEMES.includes(source.theme) ? source.theme : "auto",
       matchesOnly: source.matchesOnly === true,
       exportFormat: EXPORT_FORMATS.includes(source.exportFormat) ? source.exportFormat : "json",
       exportFilteredOnly: source.exportFilteredOnly === true,
@@ -156,7 +151,6 @@
       keepHistory: requestedMode === "persistent",
       historyMode: requestedMode,
       historyRetentionDays: [7, 30, 90].includes(retention) ? retention : 30,
-      locale: SUPPORTED_LOCALES.includes(source.locale) || source.locale === "auto" ? source.locale : "auto",
       onboardingSeen: source.onboardingSeen === true
     };
   }
@@ -420,27 +414,6 @@
     return counts;
   }
 
-  // ── Locale and theme resolution ──────────────────────────────────
-
-  function sanitizeLocale(requested) {
-    const value = String(requested || "");
-    if (value === "auto") return "auto";
-    if (SUPPORTED_LOCALES.includes(value)) return value;
-    const base = value.toLowerCase().split(/[-_]/)[0];
-    return SUPPORTED_LOCALES.includes(base) ? base : "auto";
-  }
-
-  function detectLocale(language) {
-    const base = String(language || "en").toLowerCase().split(/[-_]/)[0];
-    return SUPPORTED_LOCALES.includes(base) ? base : "en";
-  }
-
-  function resolveTheme(requested, prefersDark) {
-    const theme = THEMES.includes(requested) ? requested : "auto";
-    if (theme === "auto") return prefersDark ? "dark" : "light";
-    return theme;
-  }
-
   const api = {
     SCHEMA_VERSION,
     MESSAGE_SCHEMA_VERSION,
@@ -450,8 +423,6 @@
     EXPORT_SIGNAL_KEYS,
     ERROR_CODES,
     HISTORY_LIMITS,
-    SUPPORTED_LOCALES,
-    THEMES,
     PIPELINE_STATES,
     PIPELINE_FILTERS,
     PIPELINE_LIMIT,
@@ -476,10 +447,7 @@
     sanitizePipeline,
     setPipelineState,
     applyPipelineFilter,
-    pipelineCounts,
-    sanitizeLocale,
-    detectLocale,
-    resolveTheme
+    pipelineCounts
   };
   globalThis.__LI_FEED_SHARED__ = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

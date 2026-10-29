@@ -52,8 +52,7 @@ PRIVATE BY DESIGN
 • Full post text and e-mail addresses are excluded from exports unless you opt in.
 
 INTERFACE
-• English, French and Arabic, including a right-to-left layout.
-• Light, dark, or follow the system theme.
+• English interface with a light theme.
 • Keyboard shortcuts: Ctrl+Shift+L opens the popup, Ctrl+Shift+M starts or stops the
   hiring monitor, Ctrl+Shift+S starts or pauses feed scrolling. All three are remappable
   at chrome://extensions/shortcuts.
@@ -70,7 +69,7 @@ LinkedIn.
 | Field | Value |
 | --- | --- |
 | Category | Productivity |
-| Language | English (listing); interface ships English, French, Arabic |
+| Language | English |
 | Homepage / support | repository README |
 | Privacy policy | required because the extension handles page content — describe: no collection, no transfer, no sale |
 
@@ -98,15 +97,13 @@ LinkedIn.
 | File | Size | Use |
 | --- | --- | --- |
 | `store/screenshot-1-pipeline.png` | 1280×800 | Screenshot 1 — hiring pipeline and result card |
-| `store/screenshot-2-dark.png` | 1280×800 | Screenshot 2 — dark theme, post actions |
-| `store/screenshot-3-scroll.png` | 1280×800 | Screenshot 3 — adaptive scrolling in progress |
-| `store/screenshot-4-settings.png` | 1280×800 | Screenshot 4 — settings and keyboard shortcuts |
-| `store/screenshot-5-french.png` | 1280×800 | Screenshot 5 — French interface |
+| `store/screenshot-2-scroll.png` | 1280×800 | Screenshot 2 — adaptive scrolling in progress |
+| `store/screenshot-3-settings.png` | 1280×800 | Screenshot 3 — settings and keyboard shortcuts |
 | `store/promo-small.png` | 440×280 | Small promo tile |
 | `store/promo-large.png` | 920×680 | Large promo tile |
 | `store/promo-marquee.png` | 1400×560 | Marquee promo tile |
 
-The five screenshots are the store maximum. Every frame is composed from the real popup
+Run `npm run store:assets` after UI changes. Every frame is composed from the real popup
 served by `scripts/preview-popup.cjs`, so the screenshots cannot drift from the shipped UI
 without the build failing.
 

@@ -22,7 +22,7 @@ remote code, no telemetry, no network calls beyond the tab the user is viewing.
 | `features/feed-monitor/linkedin-hiring-monitor.js` | Feed scanner orchestration: post roots, expansion, metrics, filtering, export archive |
 | `features/feed-monitor/content.js` | Adaptive scroll session controller |
 | `infrastructure/background.js` | Service worker: history coordination, SPA feed injection |
-| `features/popup/` | Popup UI with localization (en/fr/ar), export and diagnostics |
+| `features/popup/` | Popup UI (English-only), export and diagnostics |
 | `scripts/` | Packaging (Node, no Python) and the popup preview harness |
 | `tests/` | Zero-dependency `node:test` suite |
 

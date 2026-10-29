@@ -43,7 +43,7 @@ test("collectRuntimeFiles lists exactly the files the manifest and popup need", 
   assert.deepEqual(files, [...files].sort(), "sorted for a deterministic archive");
   assert.ok(files.includes("features/popup/popup.css"), "popup stylesheet is collected");
   assert.ok(files.includes("features/popup/popup.js"), "popup scripts are collected");
-  assert.ok(files.includes("features/popup/popup-locales.js"), "extra locales are collected");
+  assert.ok(files.includes("features/popup/popup-i18n.js"), "the English string table is collected");
   assert.ok(files.includes("features/popup/popup-store.js"), "the popup store is collected");
   assert.ok(files.includes("core/linkedin-shared.js"), "the shared pipeline layer is collected");
   assert.equal(files.some((file) => file.startsWith("tests/")), false);

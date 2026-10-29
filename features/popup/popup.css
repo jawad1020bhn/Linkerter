@@ -47,7 +47,7 @@
   --focus: #0b7a63;
 
   /* --navy is a surface tone (masthead gradient, badges); --navy-ink is the matching
-     text tone. They diverge in dark mode, where a navy surface must stay dark. */
+     text tone. */
   --navy-ink: #101c26;
   --badge-bg: #101c26;
   --badge-ink: #ffffff;
@@ -1647,69 +1647,4 @@ input.select-control[type="search"] {
   white-space: nowrap;
 }
 
-/* ── Dark theme ──────────────────────────────────────────────
-   The light palette is the default. These overrides keep the same
-   semantic token names so every component follows automatically. */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --ink: #e8eef3;
-  --muted: #9fb0bd;
-  --paper: #10161c;
-  --surface: #18212a;
-  --teal: #4fd1b0;
-  --navy: #0d1720;
-  --navy-ink: #e8eef3;
-  --badge-bg: #dbe6ee;
-  --badge-ink: #0d1720;
-  --danger: #f2918a;
-  --teal-deep: #7ce3c6;
-  --teal-tint: #12352e;
-  --teal-line: #24594d;
-  --navy-tint: #202b35;
-  --amber-tint: #3a2f16;
-  --amber-ink: #f0cf8a;
-  --amber-line: #5a4820;
-  --danger-tint: #3a1d1b;
-  --danger-line: #5c2f2b;
-  --green: #7ad69a;
-  --green-tint: #16351f;
-  --line: #2a3742;
-  --line-soft: #222d36;
-  --fill: #212c35;
-  --focus: #4fd1b0;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.45), 0 8px 20px rgba(0, 0, 0, 0.35);
-  accent-color: #4fd1b0;
-}
-
-:root[data-theme="dark"] .match-item.stale {
-  background: #201b10;
-}
-
-/* Field labels use a hardcoded ink that disappears on a dark surface. */
-:root[data-theme="dark"] .field-label {
-  color: var(--muted);
-}
-
-:root[data-theme="dark"] .match-category.recruiter_search,
-:root[data-theme="dark"] .pipeline-badge.saved {
-  background: #1c2540;
-  color: #a9b8f5;
-  border-color: #33406b;
-}
-
-:root[data-theme="dark"] .match-category.job_seeker {
-  background: #12283c;
-  color: #9fc7ef;
-}
-
-:root[data-theme="dark"] .match-category.hiring_discussion {
-  background: #2a1f3c;
-  color: #cbb2f0;
-}
-
-:root[data-theme="dark"] .workspace,
-:root[data-theme="dark"] .detail-full-text {
-  scrollbar-color: #3a4854 transparent;
-}
 

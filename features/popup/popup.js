@@ -53,8 +53,6 @@ const elements = {
   hiringView: $("#hiringView"),
   settingsView: $("#settingsView"),
   connectionChip: $("#connectionChip"),
-  localeSelect: $("#localeSelect"),
-  themeSelect: $("#themeSelect"),
   pipelineChips: $("#pipelineChips"),
   pipelineDelta: $("#pipelineDelta"),
   shortcutsBtn: $("#shortcutsBtn"),
@@ -228,21 +226,11 @@ function updateSettingLabels() {
   elements.safeBadge.textContent = t(mode === "super_fast" ? "pace.locked" : "pace.smart");
 }
 
-const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
-
-function applyTheme() {
-  const theme = shared.resolveTheme(hiringPrefs.theme, Boolean(darkQuery?.matches));
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-}
-
-function applyPopupLocale() {
-  const requested = hiringPrefs.locale === "auto" || shared.SUPPORTED_LOCALES.includes(hiringPrefs.locale)
-    ? hiringPrefs.locale
-    : "auto";
-  i18n.setLocale(requested);
-  i18n.applyLocale(document);
-  elements.localeSelect.value = requested;
+// The popup is English-only with a light palette: there is nothing to resolve at
+// runtime, but the static string pass also rewrites dynamic labels, so the live status
+// surfaces are re-rendered from the last known state right after it.
+function applyInterfaceStrings() {
+  i18n.applyStrings(document);
   elements.onboarding.hidden = Boolean(hiringPrefs.onboardingSeen);
   updateSettingLabels();
   if (hiringStatus) renderHiringStatus(hiringStatus);
@@ -250,9 +238,6 @@ function applyPopupLocale() {
     elements.monitorBtn.textContent = t("monitor.start");
     elements.pageStatus.textContent = t("results.page", { page: resultQuery.page, count: 0 });
   }
-  // applyLocale rewrites every [data-i18n] node with its static placeholder, which also
-  // clobbers the live masthead, notice and button labels. Re-render from the last status
-  // so a language change never leaves a running session looking stopped.
   if (scrollStatus) renderScrollStatus(scrollStatus);
   renderHistoryStatus();
 }
@@ -268,7 +253,6 @@ function readHiringPrefs() {
     autoExpand: elements.autoExpand.checked,
     filter: FILTERS.includes(elements.categoryFilter.value) ? elements.categoryFilter.value : "all",
     pipelineFilter: shared.PIPELINE_FILTERS.includes(resultQuery.pipelineFilter) ? resultQuery.pipelineFilter : "all",
-    theme: shared.THEMES.includes(elements.themeSelect.value) ? elements.themeSelect.value : "auto",
     matchesOnly: elements.matchesOnly.checked,
     exportFormat: format,
     exportFilteredOnly: elements.exportFilteredOnly.checked,
@@ -282,9 +266,6 @@ function readHiringPrefs() {
     historyMode: ["off", "session", "persistent"].includes(elements.historyMode.value) ? elements.historyMode.value : "off",
     keepHistory: elements.historyMode.value !== "off",
     historyRetentionDays: [7, 30, 90].includes(requestedRetention) ? requestedRetention : 30,
-    locale: elements.localeSelect.value === "auto" || shared.SUPPORTED_LOCALES.includes(elements.localeSelect.value)
-      ? elements.localeSelect.value
-      : "auto",
     onboardingSeen: Boolean(hiringPrefs?.onboardingSeen)
   };
 }
@@ -1058,7 +1039,7 @@ async function clearAllStoredData() {
     resetPopupForm();
     renderTargetState();
     renderHiringStatus({ supported: false, isFeed: false, monitoring: false, counts: {}, processedCount: 0, archiveCount: 0 });
-    applyPopupLocale();
+    applyInterfaceStrings();
     elements.exportStatus.textContent = t("clear.allDone");
     setGlobalNotice(t("clear.allDone"), "success");
   } catch (_error) {
@@ -1097,7 +1078,7 @@ async function exportHiringPosts() {
     const totalAvailable = posts.length;
     const exportOptions = {
       preferences,
-      locale: i18n.locale || (preferences.locale === "auto" ? "en" : preferences.locale),
+      locale: i18n.locale,
       scope: selectedCategory !== "all"
         ? `Posts from the selected category: ${selectedCategory}.`
         : "All detected posts available from the current run and local history.",
@@ -1262,9 +1243,7 @@ async function initialize() {
     hiringPrefs = { ...DEFAULT_HIRING_PREFS, ...(stored.hiringPreferences || {}) };
     if (!FILTERS.includes(hiringPrefs.filter)) hiringPrefs.filter = "all";
     if (!shared.PIPELINE_FILTERS.includes(hiringPrefs.pipelineFilter)) hiringPrefs.pipelineFilter = "all";
-    if (!shared.THEMES.includes(hiringPrefs.theme)) hiringPrefs.theme = "auto";
     if (!["json", "csv", "html", "markdown"].includes(hiringPrefs.exportFormat)) hiringPrefs.exportFormat = "json";
-    if (!["auto", ...shared.SUPPORTED_LOCALES].includes(hiringPrefs.locale)) hiringPrefs.locale = "auto";
     hiringPrefs.onboardingSeen = hiringPrefs.onboardingSeen === true;
     if (![7, 30, 90].includes(Number(hiringPrefs.historyRetentionDays))) hiringPrefs.historyRetentionDays = 30;
     if (!["off", "session", "persistent"].includes(hiringPrefs.historyMode)) {
@@ -1283,7 +1262,6 @@ async function initialize() {
     elements.categoryFilter.value = hiringPrefs.filter;
     resultQuery.filter = hiringPrefs.filter;
     resultQuery.pipelineFilter = hiringPrefs.pipelineFilter;
-    elements.themeSelect.value = hiringPrefs.theme;
     elements.resultSearch.value = resultQuery.search;
     elements.resultSort.value = resultQuery.sort;
     elements.matchesOnly.checked = Boolean(hiringPrefs.matchesOnly);
@@ -1311,9 +1289,8 @@ async function initialize() {
     pipelineBaselineAt = null;
     resetPopupForm();
   }
-  applyTheme();
   await loadShortcuts();
-  applyPopupLocale();
+  applyInterfaceStrings();
   await refreshSavedHistory();
 
   elements.mode.addEventListener("change", () => { applySafetyModeConstraints(); queueSaveSettings(); });
@@ -1325,17 +1302,6 @@ async function initialize() {
   elements.stop.addEventListener("click", () => void runScrollCommand("STOP"));
   elements.monitorBtn.addEventListener("click", () => void runMonitorCommand());
   elements.exportBtn.addEventListener("click", () => void exportHiringPosts());
-  elements.localeSelect.addEventListener("change", () => {
-    hiringPrefs.locale = elements.localeSelect.value;
-    applyPopupLocale();
-    void saveHiringPrefs().catch(() => setGlobalNotice(t("settings.saveFailed"), "error"));
-  });
-  elements.themeSelect.addEventListener("change", () => {
-    hiringPrefs.theme = shared.THEMES.includes(elements.themeSelect.value) ? elements.themeSelect.value : "auto";
-    applyTheme();
-    void saveHiringPrefs().catch(() => setGlobalNotice(t("settings.saveFailed"), "error"));
-  });
-  darkQuery?.addEventListener?.("change", applyTheme);
   elements.pipelineChips.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-pipeline-filter]");
     if (chip) void setPipelineFilter(chip.getAttribute("data-pipeline-filter"));

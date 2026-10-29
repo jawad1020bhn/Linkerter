@@ -51,7 +51,7 @@ test("toggle-monitor starts with sanitized stored preferences when idle", async 
     stored: {
       hiringPreferences: {
         autoExpand: false, filter: "possible", matchesOnly: true,
-        historyMode: "persistent", historyRetentionDays: 7, locale: "de"
+        historyMode: "persistent", historyRetentionDays: 7
       }
     },
     hiringStatus: { monitoring: false }

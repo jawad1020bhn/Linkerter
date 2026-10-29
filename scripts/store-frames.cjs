@@ -27,7 +27,7 @@ const COPY = Object.freeze({
   points: [
     "Detects openings, recruiter searches and job-seeker posts",
     "New since your last run, saved, and applied — one click each",
-    "English, French and Arabic interface",
+    "Exports to JSON, CSV, HTML and Markdown",
     "No AI service, no uploads, no telemetry"
   ],
   foot: "Local only · Runs in your browser · Chrome MV3",
@@ -58,19 +58,6 @@ const BASE_CSS = `
   --shadow: 0 28px 70px rgba(13, 26, 36, 0.18), 0 4px 14px rgba(13, 26, 36, 0.08);
 }
 
-body[data-theme="dark"] {
-  --navy: #050b10;
-  --ink: #e8eef3;
-  --muted: #9fb0bd;
-  --paper: #0b1218;
-  --surface: #18212a;
-  --teal: #4fd1b0;
-  --teal-deep: #7ce3c6;
-  --teal-tint: #12352e;
-  --line: #24313c;
-  --shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
 html, body { margin: 0; height: 100%; }
 
 body {
@@ -95,15 +82,6 @@ body::before {
     linear-gradient(to bottom, rgba(13, 26, 36, 0.055) 1px, transparent 1px);
   background-size: auto, auto, 48px 48px, 48px 48px;
   pointer-events: none;
-}
-
-body[data-theme="dark"]::before {
-  background-image:
-    radial-gradient(1000px 620px at 88% -12%, rgba(79, 209, 176, 0.16), transparent 62%),
-    radial-gradient(760px 520px at -8% 108%, rgba(79, 209, 176, 0.06), transparent 60%),
-    linear-gradient(to right, rgba(232, 238, 243, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(232, 238, 243, 0.05) 1px, transparent 1px);
-  background-size: auto, auto, 48px 48px, 48px 48px;
 }
 
 .frame {
@@ -277,27 +255,10 @@ const frames = [
     kind: "screenshot",
     title: "Hiring pipeline",
     copy: { title: COPY.title, lede: COPY.lede, points: COPY.points.slice(0, 3) },
-    theme: "light",
-    popup: { locale: "en", theme: "light", tab: "hiring", scroll: 610 }
+    popup: { tab: "hiring", scroll: 610 }
   },
   {
-    id: "screenshot-2-dark",
-    kind: "screenshot",
-    title: "Dark theme",
-    copy: {
-      title: "Built for the feed\nyou actually read.",
-      lede: "A dark interface, the same private pipeline, and triage that takes one click per post. Nothing is uploaded, ever.",
-      points: [
-        "Save or mark a post as applied without leaving the popup",
-        "Your own review labels, kept on this device",
-        "Exports to JSON, CSV, HTML and Markdown"
-      ]
-    },
-    theme: "dark",
-    popup: { locale: "en", theme: "dark", tab: "hiring", scroll: 810 }
-  },
-  {
-    id: "screenshot-3-scroll",
+    id: "screenshot-2-scroll",
     kind: "screenshot",
     title: "Adaptive scrolling",
     copy: {
@@ -309,40 +270,22 @@ const frames = [
         "Scrolling continues in the background tab"
       ]
     },
-    theme: "light",
-    popup: { locale: "en", theme: "light", tab: "scroll" }
+    popup: { tab: "scroll" }
   },
   {
-    id: "screenshot-4-settings",
+    id: "screenshot-3-settings",
     kind: "screenshot",
     title: "Settings and shortcuts",
     copy: {
       title: "Every limit\nin one place.",
-      lede: "Language, appearance, detection, history, exports and keyboard shortcuts — grouped instead of scattered.",
+      lede: "Detection, history, exports and keyboard shortcuts — grouped instead of scattered.",
       points: [
         "Ctrl+Shift+L opens the popup",
         "Ctrl+Shift+M starts or stops the hiring monitor",
         "Ctrl+Shift+S starts or pauses feed scrolling"
       ]
     },
-    theme: "light",
-    popup: { locale: "en", theme: "light", tab: "hiring", settings: true, details: ["settingsCommandsTitle"], scroll: 110 }
-  },
-  {
-    id: "screenshot-5-french",
-    kind: "screenshot",
-    title: "French interface",
-    copy: {
-      title: "Your own labels.\nYour own pipeline.",
-      lede: "Tag what you have read, saved or applied to, and pick up exactly where you stopped. The labels stay on this device.",
-      points: [
-        "One click to save a post or mark it as applied",
-        "A delta badge for everything new since your last run",
-        "Interface available in English, French and Arabic"
-      ]
-    },
-    theme: "light",
-    popup: { locale: "fr", theme: "light", tab: "hiring", scroll: 560 }
+    popup: { tab: "hiring", settings: true, details: ["settingsCommandsTitle"], scroll: 110 }
   },
   {
     id: "promo-small",
@@ -358,8 +301,7 @@ const frames = [
       lede: "Adaptive feed scrolling with a local hiring detector, a private pipeline, and exports that never leave your machine.",
       points: COPY.points
     },
-    theme: "light",
-    popup: { locale: "en", theme: "light", tab: "hiring", scroll: 810 }
+    popup: { tab: "hiring", scroll: 810 }
   },
   {
     id: "promo-marquee",
@@ -431,7 +373,7 @@ function promoBody(frame) {
       <div class="tile-row"><img src="/icons/icon-48.png" alt=""><strong>${COPY.name}</strong></div>
       <h1>${escapeHtml(COPY.marqueeTitle)}</h1>
       <p>${escapeHtml(COPY.marqueeLede)}</p>
-      <div class="tile-chips"><span>EN</span><span>FR</span><span>AR</span></div>
+      <div class="tile-chips"><span>JSON</span><span>CSV</span><span>HTML</span><span>Markdown</span></div>
     </section>
     ${pointsHtml(COPY.points)}
   </main>`;
@@ -447,14 +389,6 @@ const POPUP_DRIVER = `
   const deadline = Date.now() + 15000;
 
   const apply = (doc) => {
-    const setSelect = (id, value) => {
-      const node = doc.getElementById(id);
-      if (!node || !value) return;
-      node.value = value;
-      node.dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
-    };
-    setSelect("themeSelect", config.theme);
-    setSelect("localeSelect", config.locale);
     if (config.tab) doc.getElementById(config.tab === "scroll" ? "scrollTab" : "hiringTab")?.click();
     if (config.settings) doc.getElementById("settingsToggle")?.click();
     for (const id of config.details || []) {
@@ -498,7 +432,7 @@ function renderFrame(id) {
 ${BASE_CSS}
 </style>
 </head>
-<body data-theme="${frame.theme || "light"}" data-ready="false">
+<body data-ready="false">
 ${body}
 <script>${frame.popup ? POPUP_DRIVER : 'document.body.dataset.ready = "true";'}</script>
 </body>

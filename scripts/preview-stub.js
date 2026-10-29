@@ -283,9 +283,7 @@
       historyRetentionDays: 30,
       filter: "all",
       pipelineFilter: "all",
-      sort: "relevance",
-      locale: "en",
-      theme: "light"
+      sort: "relevance"
     },
     // Two posts were already triaged in an earlier session; the rest are untouched.
     hiringPipeline: {

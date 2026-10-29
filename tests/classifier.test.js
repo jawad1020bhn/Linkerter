@@ -124,8 +124,8 @@ test("an empty post has no signal and no evidence", () => {
 });
 
 // ── Spanish, German and Portuguese ────────────────────────────────
-// The three new interface locales ship with matching rule tables, so the same
-// evidence that promotes an English or French post has to promote these too.
+// The classifier ships rule tables for Spanish, German and Portuguese posts, so the
+// same evidence that promotes an English or French post has to promote these too.
 
 test("Spanish hiring post with a contact address is a strong opening", () => {
   const result = classify("Estamos contratando un desarrollador backend en Madrid. Envía tu CV a rrhh@empresa.es");
