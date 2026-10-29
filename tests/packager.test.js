@@ -48,9 +48,6 @@ test("collectRuntimeFiles lists exactly the files the manifest and popup need", 
   assert.ok(files.includes("core/linkedin-shared.js"), "the shared pipeline layer is collected");
   assert.equal(files.some((file) => file.startsWith("tests/")), false);
   assert.equal(files.some((file) => file.startsWith("scripts/")), false);
-  // Store assets are marketing output, not runtime code: a screenshot must never bloat
-  // the archive the browser installs.
-  assert.equal(files.some((file) => file.startsWith("store/")), false);
 });
 
 test("collectRuntimeFiles rejects unsafe paths from the manifest", () => {
@@ -70,23 +67,23 @@ test("collectRuntimeFiles rejects unsafe paths from the manifest", () => {
   }
 });
 
-test("the archive is deterministic and carries the requested prefix", () => {
+test("the archive is deterministic and carries the unpacked prefix", () => {
   const files = collectRuntimeFiles(ROOT);
-  const first = buildArchiveBuffer({ root: ROOT, files, prefix: "" });
-  const second = buildArchiveBuffer({ root: ROOT, files, prefix: "" });
+  const first = buildArchiveBuffer({ root: ROOT, files });
+  const second = buildArchiveBuffer({ root: ROOT, files });
   assert.deepEqual(first, second, "two builds are byte-identical");
+  assert.deepEqual(listEntries(first), files.map((file) => `linkedin-feed-scroller/${file}`),
+    "every entry ships under the top-level extension folder");
 
-  const prefixed = buildArchiveBuffer({ root: ROOT, files, prefix: "linkedin-feed-scroller/" });
-  const names = listEntries(prefixed);
-  assert.deepEqual(names, files.map((file) => `linkedin-feed-scroller/${file}`));
-  assert.deepEqual(listEntries(first), files);
+  const unprefixed = buildArchiveBuffer({ root: ROOT, files, prefix: "" });
+  assert.deepEqual(listEntries(unprefixed), files);
 });
 
 test("buildArchive writes the archive to disk", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "linkerter-pack-"));
   try {
     const out = path.join(temp, "extension.zip");
-    const result = buildArchive({ root: ROOT, out, mode: "store" });
+    const result = buildArchive({ root: ROOT, out });
     assert.equal(result.out, out);
     assert.ok(fs.statSync(out).size > 0);
     assert.equal(result.files, collectRuntimeFiles(ROOT).length);
@@ -95,29 +92,26 @@ test("buildArchive writes the archive to disk", () => {
   }
 });
 
-test("the CLI builds both variants and rejects bad usage", () => {
+test("the CLI builds the archive and rejects store-era flags and bad usage", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "linkerter-cli-"));
   try {
-    const storeZip = path.join(temp, "store.zip");
-    const store = spawnSync(process.execPath, [path.join(ROOT, "scripts/package-extension.cjs"), "--store", storeZip], {
+    const zipPath = path.join(temp, "extension.zip");
+    const built = spawnSync(process.execPath, [path.join(ROOT, "scripts/package-extension.cjs"), zipPath], {
       cwd: ROOT, encoding: "utf8"
     });
-    assert.equal(store.status, 0, store.stderr);
-    assert.match(store.stdout, /store, deterministic/);
-    assert.ok(listEntries(fs.readFileSync(storeZip)).includes("manifest.json"));
+    assert.equal(built.status, 0, built.stderr);
+    assert.match(built.stdout, /deterministic/);
+    assert.ok(listEntries(fs.readFileSync(zipPath)).includes("linkedin-feed-scroller/manifest.json"));
 
-    const unpackedZip = path.join(temp, "unpacked.zip");
-    const unpacked = spawnSync(process.execPath, [path.join(ROOT, "scripts/package-extension.cjs"), unpackedZip], {
-      cwd: ROOT, encoding: "utf8"
-    });
-    assert.equal(unpacked.status, 0, unpacked.stderr);
-    assert.ok(listEntries(fs.readFileSync(unpackedZip)).includes("linkedin-feed-scroller/manifest.json"));
-
-    const bad = spawnSync(process.execPath, [path.join(ROOT, "scripts/package-extension.cjs"), "--nope"], {
-      cwd: ROOT, encoding: "utf8"
-    });
-    assert.equal(bad.status, 2);
-    assert.match(bad.stderr, /Usage/);
+    // The extension is never uploaded to the Chrome Web Store, so the former packaging
+    // flags must fail loudly instead of silently building something misleading.
+    for (const flag of ["--store", "--unpacked", "--nope"]) {
+      const rejected = spawnSync(process.execPath, [path.join(ROOT, "scripts/package-extension.cjs"), flag], {
+        cwd: ROOT, encoding: "utf8"
+      });
+      assert.equal(rejected.status, 2, flag);
+      assert.match(rejected.stderr, /Usage/);
+    }
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

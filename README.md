@@ -53,7 +53,6 @@ Every content module has a re-entrancy guard, so double injection is harmless.
 
 ```bash
 npm run package                              # linkedin-feed-scroller.zip
-npm run package:store                        # store variant
 node scripts/package-extension.cjs out.zip   # explicit output path
 ```
 

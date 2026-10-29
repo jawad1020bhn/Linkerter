@@ -7,9 +7,6 @@
  *
  *   npm run preview:popup          -> http://localhost:4173
  *
- * It also serves the Chrome Web Store frames at /store/<frame-id> so
- * scripts/build-store-assets.cjs can capture them at exact store pixel sizes.
- *
  * Nothing here ships in the packaged extension and nothing here contacts LinkedIn.
  */
 "use strict";
@@ -25,9 +22,7 @@ const POPUP_DIR = path.join(ROOT, "features", "popup");
 const STATIC_ROOTS = [
   ["/core/", path.join(ROOT, "core")],
   ["/features/", path.join(ROOT, "features")],
-  ["/infrastructure/", path.join(ROOT, "infrastructure")],
-  // The store frames brand themselves with the packaged extension icons.
-  ["/icons/", path.join(ROOT, "icons")]
+  ["/infrastructure/", path.join(ROOT, "infrastructure")]
 ];
 const HOST = process.env.PREVIEW_HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || process.env.PREVIEW_PORT || 4173);
@@ -142,20 +137,6 @@ const server = http.createServer((req, res) => {
     return send(res, 200, fs.readFileSync(path.join(__dirname, "preview-stub.js"), "utf8"), TYPES[".js"]);
   }
   if (urlPath === "/healthz") return send(res, 200, JSON.stringify({ ok: true }), TYPES[".json"]);
-
-  // /store/<frame-id> renders one Chrome Web Store frame at its exact pixel size. The
-  // frame module lives in scripts/ and is required lazily so the popup preview stays
-  // usable even if the store tooling is being edited.
-  if (urlPath.startsWith("/store/")) {
-    const id = urlPath.slice("/store/".length).replace(/\/$/, "");
-    let html = null;
-    try {
-      html = require("./store-frames.cjs").renderFrame(id);
-    } catch (error) {
-      return send(res, 404, `Unknown store frame: ${id}\n${error.message}`);
-    }
-    return send(res, 200, html, TYPES[".html"]);
-  }
 
   const file = safeStatic(urlPath);
   if (file) return send(res, 200, fs.readFileSync(file), TYPES[path.extname(file).toLowerCase()]);
