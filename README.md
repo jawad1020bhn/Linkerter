@@ -7,8 +7,9 @@
 A zero-dependency Chrome MV3 extension that scrolls the LinkedIn feed at a
 human-comfortable pace and, while it does, classifies posts locally for hiring
 signals (openings, recruiter searches, job seekers, closed positions) in
-English, French and Arabic. Everything is processed and stored on-device: no
-remote code, no telemetry, no network calls beyond the tab the user is viewing.
+English, French, Arabic, Spanish, German and Portuguese. Everything is processed
+and stored on-device: no remote code, no telemetry, no network calls beyond the
+tab the user is viewing.
 
 ## Files
 

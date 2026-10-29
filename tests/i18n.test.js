@@ -32,6 +32,22 @@ test("every key used by popup.html exists in the dictionary", () => {
   assert.deepEqual(missing, [], "missing popup keys");
 });
 
+// The markup carries its own English so the popup still reads correctly before applyStrings
+// runs. That copy is a second place strings live, so it drifted silently before: the header
+// still said "Feed Assistant" and the detector note listed three of the six post languages.
+test("inline HTML fallbacks match the dictionary", () => {
+  const normalize = (value) => value.replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  const drifted = [];
+  for (const match of html.matchAll(/data-i18n="([^"]+)"([^>]*)>([^<]*)</g)) {
+    const [, key, attributes, fallback] = match;
+    if (!Object.hasOwn(i18n.dictionary, key)) continue;
+    // A data-i18n-count option shows its concrete number ("15 minutes"), not the template.
+    if (/data-i18n-count/.test(attributes)) continue;
+    if (normalize(fallback) !== normalize(i18n.dictionary[key])) drifted.push(key);
+  }
+  assert.deepEqual(drifted, [], "inline fallbacks drifted from the dictionary");
+});
+
 test("t substitutes placeholders and falls back to the key name", () => {
   assert.equal(i18n.t("time.minutes", { count: 5 }), "5 minutes");
   assert.equal(i18n.t("results.page", { page: 2, count: 40 }), "Page 2 · 40 results");

@@ -1,0 +1,6 @@
+# Packaged archives produced by `npm run package` — build output, never sources.
+*.zip
+
+# OS and editor noise.
+.DS_Store
+Thumbs.db
