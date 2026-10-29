@@ -590,17 +590,17 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== "string") return false;
     switch (message.type) {
-      case "GET_STATUS":
+      case shared.MESSAGE_TYPES.SCROLL.GET_STATUS:
         sendResponse(getStatus());
         return false;
-      case "START":
+      case shared.MESSAGE_TYPES.SCROLL.START:
         sendResponse(startSession(message.settings));
         return false;
-      case "PAUSE":
+      case shared.MESSAGE_TYPES.SCROLL.PAUSE:
         pauseSession("Paused by you.");
         sendResponse({ ok: true, status: getStatus() });
         return false;
-      case "RESUME":
+      case shared.MESSAGE_TYPES.SCROLL.RESUME:
         if (!isFeedPage()) {
           sendResponse({ ok: false, error: "open_feed", message: "Open the LinkedIn feed before resuming." });
           return false;
@@ -608,7 +608,7 @@
         resumeSession();
         sendResponse({ ok: true, status: getStatus() });
         return false;
-      case "STOP":
+      case shared.MESSAGE_TYPES.SCROLL.STOP:
         stopSession("Stopped by you.");
         sendResponse({ ok: true, status: getStatus() });
         return false;

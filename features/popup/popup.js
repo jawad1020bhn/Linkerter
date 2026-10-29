@@ -417,8 +417,8 @@ async function setTargetTab(tabId, windowId, stopPrevious = true) {
     targetWindowId = windowId;
   }
   if (stopPrevious && Number.isInteger(previousTabId) && previousTabId !== tabId) {
-    try { await chrome.tabs.sendMessage(previousTabId, { type: "STOP_HIRING_MONITOR" }); } catch (_error) { /* Old target may have closed. */ }
-    try { await chrome.tabs.sendMessage(previousTabId, { type: "STOP" }); } catch (_error) { /* Old target may have closed. */ }
+    try { await chrome.tabs.sendMessage(previousTabId, { type: shared.MESSAGE_TYPES.HIRING.STOP }); } catch (_error) { /* Old target may have closed. */ }
+    try { await chrome.tabs.sendMessage(previousTabId, { type: shared.MESSAGE_TYPES.SCROLL.STOP }); } catch (_error) { /* Old target may have closed. */ }
   }
   await writeTargetForWindow(windowId, tabId);
   if (targetTabId === tabId) renderTargetState();
@@ -435,7 +435,7 @@ async function chooseActiveFeedTab(tab = null, quiet = false) {
     return false;
   }
   try {
-    const status = await chrome.tabs.sendMessage(current.id, { type: "GET_STATUS" });
+    const status = await chrome.tabs.sendMessage(current.id, { type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS });
     if (!status?.isFeed) {
       if (!quiet) setGlobalNotice(t("notice.openFeedExact"));
       return false;
@@ -494,7 +494,7 @@ async function initializeTarget() {
         if (rememberedTab.windowId !== windowId || !isLinkedInFeedUrl(rememberedTab.url)) {
           throw new Error("Remembered target moved or left the feed.");
         }
-        const status = await chrome.tabs.sendMessage(rememberedId, { type: "GET_STATUS" });
+        const status = await chrome.tabs.sendMessage(rememberedId, { type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS });
         if (status?.isFeed) await setTargetTab(rememberedId, windowId, false);
         else await writeTargetForWindow(windowId, null);
       } catch (_error) {
@@ -613,7 +613,7 @@ function renderPipelineBar(counts) {
 
 async function notifyPipeline(generation = stateGeneration) {
   const response = await sendToTargetTab({
-    type: "SET_HIRING_PIPELINE",
+    type: shared.MESSAGE_TYPES.HIRING.SET_PIPELINE,
     pipeline,
     baselineAt: pipelineBaselineAt,
     filter: resultQuery.pipelineFilter
@@ -709,7 +709,7 @@ async function showPostDetail(id) {
   const generation = stateGeneration;
   elements.postDetail.hidden = false;
   elements.postDetail.textContent = t("results.detailLoading");
-  const response = await sendToTargetTab({ type: "GET_HIRING_POST", id }, { generation });
+  const response = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.GET_POST, id }, { generation });
   if (request !== detailGeneration || generation !== stateGeneration) return;
   if (!response?.post) {
     elements.postDetail.hidden = true;
@@ -801,7 +801,7 @@ function renderHiringStatus(status) {
 }
 
 async function refreshScrollStatus(generation = stateGeneration, commandGeneration = null) {
-  const status = await sendToTargetTab({ type: "GET_STATUS" }, { generation });
+  const status = await sendToTargetTab({ type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS }, { generation });
   if (status && generation === stateGeneration && (commandGeneration === null || commandGeneration === scrollGeneration)) {
     renderScrollStatus(status);
   }
@@ -809,7 +809,7 @@ async function refreshScrollStatus(generation = stateGeneration, commandGenerati
 
 async function refreshSavedHistory(generation = stateGeneration) {
   try {
-    const response = await chrome.runtime.sendMessage({ type: "HISTORY_GET" });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.HISTORY.GET });
     if (generation !== stateGeneration) return;
     if (response?.error) {
       savedHistoryStats = { ...savedHistoryStats, error: response.error };
@@ -837,7 +837,7 @@ async function refreshHiringStatus(generation = stateGeneration) {
   const query = { ...resultQuery };
   // History was polled on the 1.3 s refresh loop too; the storage.onChanged listener and
   // the one-time init already cover history updates, so only the live status is fetched.
-  const status = await sendToTargetTab({ type: "GET_HIRING_STATUS", query }, { generation });
+  const status = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.GET_STATUS, query }, { generation });
   if (status && generation === stateGeneration) renderHiringStatus(status);
 }
 
@@ -884,12 +884,12 @@ async function runScrollCommand(type) {
   let commandGeneration = null;
   try {
     commandGeneration = ++scrollGeneration;
-    if (type === "START") {
+    if (type === shared.MESSAGE_TYPES.SCROLL.START) {
       await saveSettings();
       if (commandGeneration !== scrollGeneration || generation !== stateGeneration) return;
       setGlobalNotice(t("scroll.starting"));
     }
-    const message = type === "START" ? { type, settings: readSettings() } : { type };
+    const message = type === shared.MESSAGE_TYPES.SCROLL.START ? { type, settings: readSettings() } : { type };
     const response = await sendToTargetTab(message, { generation });
     if (!response || commandGeneration !== scrollGeneration || generation !== stateGeneration) return;
     if (response.error) {
@@ -924,8 +924,8 @@ async function runMonitorCommand() {
     if (!isRunning) await saveHiringPrefs();
     if (generation !== stateGeneration) return;
     const response = await sendToTargetTab(isRunning
-      ? { type: "STOP_HIRING_MONITOR" }
-      : { type: "START_HIRING_MONITOR", options: monitorOptions() }, { generation });
+      ? { type: shared.MESSAGE_TYPES.HIRING.STOP }
+      : { type: shared.MESSAGE_TYPES.HIRING.START, options: monitorOptions() }, { generation });
     if (!response || generation !== stateGeneration) return;
     if (response.error) {
       setGlobalNotice(noticeForError(response), "error");
@@ -947,7 +947,7 @@ async function updateMonitorPreferences() {
     if (generation !== stateGeneration) return;
     renderHistoryStatus();
     if (hiringStatus?.monitoring && available && isFeed) {
-      await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() }, { generation });
+      await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.SET_OPTIONS, options: monitorOptions() }, { generation });
     }
     await refreshAll();
   } catch (_error) {
@@ -981,14 +981,14 @@ async function clearLocalHistory() {
   if (!window.confirm(t("clear.historyConfirm"))) return;
   elements.clearHistoryBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: "LOCAL_DATA_CLEAR", scopes: ["history"] });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.DATA.LOCAL_DATA_CLEAR, scopes: ["history"] });
     if (response?.error) throw new Error(response.error);
     elements.historyMode.value = "off";
     elements.keepHistory.checked = false;
     hiringPrefs = { ...hiringPrefs, historyMode: "off" };
     await saveHiringPrefs();
     if (hiringStatus?.monitoring && available && isFeed) {
-      const statusResponse = await sendToTargetTab({ type: "SET_HIRING_OPTIONS", options: monitorOptions() });
+      const statusResponse = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.SET_OPTIONS, options: monitorOptions() });
       if (statusResponse?.status) renderHiringStatus(statusResponse.status);
     }
     savedHistory = [];
@@ -1006,7 +1006,7 @@ async function clearAllStoredData() {
   if (!window.confirm(t("clear.allConfirm"))) return;
   elements.clearAllDataBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: "LOCAL_DATA_CLEAR", scopes: ["all"] });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.DATA.LOCAL_DATA_CLEAR, scopes: ["all"] });
     if (response?.error) throw new Error(response.error);
     stateGeneration += 1;
     detailGeneration += 1;
@@ -1041,9 +1041,9 @@ async function exportHiringPosts() {
     await saveHiringPrefs();
     if (generation !== stateGeneration) return;
     let currentRun = null;
-    if (available && isFeed) currentRun = await sendToTargetTab({ type: "EXPORT_HIRING_POSTS" }, { generation });
+    if (available && isFeed) currentRun = await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.EXPORT_POSTS }, { generation });
     if (generation !== stateGeneration) return;
-    const historyResponse = await chrome.runtime.sendMessage({ type: "HISTORY_GET" });
+    const historyResponse = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.HISTORY.GET });
     if (generation !== stateGeneration) return;
     if (historyResponse?.error) throw new Error(historyResponse.error);
     savedHistory = sanitizeHistory(historyResponse?.records || []);
@@ -1115,7 +1115,7 @@ async function exportHiringPosts() {
 async function downloadLocalDiagnostic() {
   elements.diagnosticBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: "GET_DIAGNOSTICS" });
+    const response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.DATA.GET_DIAGNOSTICS });
     if (response?.error) throw new Error(response.error);
     const status = hiringStatus || {};
     const browserVersion = String(globalThis.navigator?.userAgent || "").match(/Chrome\/([0-9.]+)/)?.[1] || "unknown";
@@ -1368,7 +1368,7 @@ async function initialize() {
       await saveHiringPrefs();
       if (generation !== stateGeneration) return;
       if (hiringStatus?.monitoring && available && isFeed) {
-        await sendToTargetTab({ type: "SET_HIRING_FILTER", filter: resultQuery.filter, matchesOnly: elements.matchesOnly.checked }, { generation });
+        await sendToTargetTab({ type: shared.MESSAGE_TYPES.HIRING.SET_FILTER, filter: resultQuery.filter, matchesOnly: elements.matchesOnly.checked }, { generation });
       }
       await refreshAll();
     } catch (_error) {

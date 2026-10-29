@@ -11,9 +11,14 @@ const HISTORY_KEYS = Object.freeze({
   preferences: "hiringPreferences"
 });
 const HISTORY_METADATA_KEY = "hiringHistoryMetadata";
+// Derived from the shared table so the background cannot accept a type the popup never
+// sends, or drop one it does. Resolved at module scope: the service worker imports
+// core/linkedin-shared.js above, and every test that requires this file preloads it.
+const SHARED_MESSAGE_TYPES = globalThis.__LI_FEED_SHARED__.MESSAGE_TYPES;
 const HISTORY_MESSAGE_TYPES = new Set([
-  "HISTORY_GET", "HISTORY_APPEND", "HISTORY_CLEAR", "HISTORY_STATUS", "HISTORY_SET_MODE",
-  "HISTORY_DELTA", "HISTORY_FLUSH", "LOCAL_DATA_CLEAR", "GET_DIAGNOSTICS"
+  ...Object.values(SHARED_MESSAGE_TYPES.HISTORY),
+  SHARED_MESSAGE_TYPES.DATA.LOCAL_DATA_CLEAR,
+  SHARED_MESSAGE_TYPES.DATA.GET_DIAGNOSTICS
 ]);
 
 function historyError(error) {
@@ -362,15 +367,15 @@ function createHistoryCoordinator({ chromeApi = globalThis.chrome, now = () => D
 
   async function dispatch(message) {
     switch (message.type) {
-      case "HISTORY_GET": return getOperation();
-      case "HISTORY_STATUS": return statusOperation();
-      case "HISTORY_APPEND": return appendOperation(message);
-      case "HISTORY_DELTA": return deltaOperation(message);
-      case "HISTORY_FLUSH": return flushDeltaOperation(message);
-      case "HISTORY_SET_MODE": return setModeOperation(message);
-      case "HISTORY_CLEAR": return clearOperation(message);
-      case "LOCAL_DATA_CLEAR": return localDataClearOperation(message);
-      case "GET_DIAGNOSTICS": return diagnosticOperation();
+      case SHARED_MESSAGE_TYPES.HISTORY.GET: return getOperation();
+      case SHARED_MESSAGE_TYPES.HISTORY.STATUS: return statusOperation();
+      case SHARED_MESSAGE_TYPES.HISTORY.APPEND: return appendOperation(message);
+      case SHARED_MESSAGE_TYPES.HISTORY.DELTA: return deltaOperation(message);
+      case SHARED_MESSAGE_TYPES.HISTORY.FLUSH: return flushDeltaOperation(message);
+      case SHARED_MESSAGE_TYPES.HISTORY.SET_MODE: return setModeOperation(message);
+      case SHARED_MESSAGE_TYPES.HISTORY.CLEAR: return clearOperation(message);
+      case SHARED_MESSAGE_TYPES.DATA.LOCAL_DATA_CLEAR: return localDataClearOperation(message);
+      case SHARED_MESSAGE_TYPES.DATA.GET_DIAGNOSTICS: return diagnosticOperation();
       default: return { ok: false, error: "not_found" };
     }
   }
@@ -448,7 +453,7 @@ function createSpaFeedInjector(options = {}) {
 
   async function probe(tabId) {
     try {
-      await chromeApi.tabs.sendMessage(tabId, { type: "GET_STATUS" });
+      await chromeApi.tabs.sendMessage(tabId, { type: SHARED_MESSAGE_TYPES.SCROLL.GET_STATUS });
       return true;
     } catch (_error) {
       return false;
@@ -533,16 +538,16 @@ function createCommandRouter(options = {}) {
     const tab = await activeFeedTab();
     if (!tab) return { ok: false, error: "open_feed" };
     if (command === "toggle-monitor") {
-      const status = await send(tab.id, { type: "GET_HIRING_STATUS", query: {} });
-      if (status && status.monitoring) return send(tab.id, { type: "STOP_HIRING_MONITOR" });
-      return send(tab.id, { type: "START_HIRING_MONITOR", options: await monitorOptions() });
+      const status = await send(tab.id, { type: SHARED_MESSAGE_TYPES.HIRING.GET_STATUS, query: {} });
+      if (status && status.monitoring) return send(tab.id, { type: SHARED_MESSAGE_TYPES.HIRING.STOP });
+      return send(tab.id, { type: SHARED_MESSAGE_TYPES.HIRING.START, options: await monitorOptions() });
     }
-    const status = await send(tab.id, { type: "GET_STATUS" });
+    const status = await send(tab.id, { type: SHARED_MESSAGE_TYPES.SCROLL.GET_STATUS });
     const state = status && status.state;
-    if (state === "running") return send(tab.id, { type: "PAUSE" });
-    if (state === "paused") return send(tab.id, { type: "RESUME" });
+    if (state === "running") return send(tab.id, { type: SHARED_MESSAGE_TYPES.SCROLL.PAUSE });
+    if (state === "paused") return send(tab.id, { type: SHARED_MESSAGE_TYPES.SCROLL.RESUME });
     const stored = await chromeApi.storage.local.get({ settings: shared.DEFAULT_SETTINGS });
-    return send(tab.id, { type: "START", settings: shared.sanitizeSettings(stored.settings || {}) });
+    return send(tab.id, { type: SHARED_MESSAGE_TYPES.SCROLL.START, settings: shared.sanitizeSettings(stored.settings || {}) });
   }
 
   function register() {

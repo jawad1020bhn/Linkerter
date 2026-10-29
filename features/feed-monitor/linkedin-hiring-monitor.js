@@ -233,7 +233,7 @@
       let response = { ok: true, flushed: 0 };
       const batch = Array.from(pendingDelta.values());
       if (batch.length && keepHistory) {
-        response = await chrome.runtime.sendMessage({ type: "HISTORY_DELTA", monitorId: MONITOR_ID, records: batch });
+        response = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.HISTORY.DELTA, monitorId: MONITOR_ID, records: batch });
         if (response?.ok) {
           for (const record of batch) {
             if (pendingDelta.get(record.id) === record) pendingDelta.delete(record.id);
@@ -241,7 +241,7 @@
         }
       }
       if (flushCoordinator) {
-        const flushed = await chrome.runtime.sendMessage({ type: "HISTORY_FLUSH", monitorId: MONITOR_ID });
+        const flushed = await chrome.runtime.sendMessage({ type: shared.MESSAGE_TYPES.HISTORY.FLUSH, monitorId: MONITOR_ID });
         response = { ...response, ...flushed };
       }
       if (response && Number.isFinite(response.count)) historyCount = response.count;
@@ -884,27 +884,27 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== "string") return false;
     switch (message.type) {
-      case "GET_HIRING_STATUS":
+      case shared.MESSAGE_TYPES.HIRING.GET_STATUS:
         sendResponse(getStatus(message.query || {}));
         return false;
-      case "GET_HIRING_POST": {
+      case shared.MESSAGE_TYPES.HIRING.GET_POST: {
         const post = exportRecords.get(String(message.id || ""));
         sendResponse(post ? { ok: true, post } : { ok: false, error: "not_found" });
         return false;
       }
-      case "EXPORT_HIRING_POSTS":
+      case shared.MESSAGE_TYPES.HIRING.EXPORT_POSTS:
         sendResponse(getExportPayload());
         return false;
-      case "START_HIRING_MONITOR":
+      case shared.MESSAGE_TYPES.HIRING.START:
         sendResponse(startMonitor(message.options || {}));
         return false;
-      case "STOP_HIRING_MONITOR":
+      case shared.MESSAGE_TYPES.HIRING.STOP:
         void stopMonitor().then(sendResponse);
         return true;
-      case "SET_HIRING_OPTIONS":
+      case shared.MESSAGE_TYPES.HIRING.SET_OPTIONS:
         sendResponse(setOptions(message.options || {}));
         return false;
-      case "SET_HIRING_FILTER": {
+      case shared.MESSAGE_TYPES.HIRING.SET_FILTER: {
         const nextFilter = typeof message.filter === "string" ? message.filter : "all";
         const nextMatchesOnly = typeof message.matchesOnly === "boolean" ? message.matchesOnly : matchesOnly;
         if (activeFilter !== nextFilter || matchesOnly !== nextMatchesOnly) restoreHiddenPosts();
@@ -915,7 +915,7 @@
         sendResponse({ supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() });
         return false;
       }
-      case "SET_HIRING_PIPELINE":
+      case shared.MESSAGE_TYPES.HIRING.SET_PIPELINE:
         configurePipeline({
           pipeline: message.pipeline,
           baselineAt: message.baselineAt,
