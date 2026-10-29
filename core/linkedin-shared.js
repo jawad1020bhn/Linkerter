@@ -20,15 +20,6 @@
     "email", "emailLink", "contactCues", "jobLink", "hashtag"
   ]);
   const HISTORY_MODES = new Set(["off", "session", "persistent"]);
-  const ERROR_CODES = Object.freeze({
-    STORAGE_UNAVAILABLE: "storage_unavailable",
-    QUOTA_EXCEEDED: "quota_exceeded",
-    INVALID_DATA: "invalid_data",
-    TAB_UNAVAILABLE: "tab_unavailable",
-    HISTORY_DISABLED: "history_disabled",
-    HISTORY_LIMIT: "history_limit",
-    NOT_FOUND: "not_found"
-  });
 
   // Single source of truth for history capacity so background and shared pruning
   // cannot drift apart (bug: the background re-declared its own limits).
@@ -36,15 +27,6 @@
     maxRecords: 500,
     maxBytes: 3_000_000
   });
-
-  class LinkerterError extends Error {
-    constructor(code, message, cause) {
-      super(message || code);
-      this.name = "LinkerterError";
-      this.code = code;
-      if (cause) this.cause = cause;
-    }
-  }
 
   const DEFAULT_SETTINGS = Object.freeze({
     mode: "standard",
@@ -421,13 +403,11 @@
     FILTERS,
     CONFIDENCE_RANK,
     EXPORT_SIGNAL_KEYS,
-    ERROR_CODES,
     HISTORY_LIMITS,
     PIPELINE_STATES,
     PIPELINE_FILTERS,
     PIPELINE_LIMIT,
     EXPORT_FORMATS,
-    LinkerterError,
     DEFAULT_SETTINGS,
     DEFAULT_HIRING_PREFS,
     sanitizeSettings,

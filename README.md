@@ -56,11 +56,10 @@ npm run package                              # linkedin-feed-scroller.zip
 node scripts/package-extension.cjs out.zip   # explicit output path
 ```
 
-The packager is Node-only (no bash or Python), so it runs unchanged on Windows. The
-`scripts/package-extension.sh` wrapper is kept for existing invocations and simply
-delegates to it. The script writes only files referenced by `manifest.json` (plus the
-popup) into a deterministic, runtime-only archive; dev working files under `scripts/`
-and `tests/` never ship.
+The packager is Node-only (no bash or Python), so it runs unchanged on Windows.
+The script writes only files referenced by `manifest.json` (plus the popup) into a
+deterministic, runtime-only archive; dev working files under `scripts/` and `tests/`
+never ship.
 
 ## Privacy
 
