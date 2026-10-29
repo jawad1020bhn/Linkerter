@@ -1,0 +1,16 @@
+{
+  "name": "linkerter-extension-development",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Development-only tooling for the zero-dependency Linkerter Chrome extension; the sources are the runtime.",
+  "scripts": {
+    "preview:popup": "node scripts/preview-popup.cjs",
+    "store:assets": "node scripts/build-store-assets.cjs",
+    "test": "node --test \"tests/*.test.js\"",
+    "package": "node scripts/package-extension.cjs",
+    "package:store": "node scripts/package-extension.cjs --store"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

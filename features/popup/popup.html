@@ -1,0 +1,462 @@
+<!DOCTYPE html><html lang="en"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Linkerter – Adaptive LinkedIn Feed</title>
+  <link rel="stylesheet" href="popup.css">
+</head><body>
+  <!-- ── Masthead: identity + live instruments, always visible ────── -->
+  <header class="masthead">
+    <div class="masthead-brand">
+      <span class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.9-2.9a3.6 3.6 0 0 0-5.1-5.1l-1.3 1.3"></path>
+          <path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.9 2.9a3.6 3.6 0 0 0 5.1 5.1l1.3-1.3"></path>
+        </svg>
+      </span>
+      <h1 data-i18n="app.name">Feed Assistant</h1>
+      <span id="connectionChip" class="connection-chip" data-i18n="connection.checking">CHECKING</span>
+    </div>
+    <section class="instruments" aria-label="Session status" data-i18n-aria-label="status.section">
+      <span class="state-wrap">
+        <span id="stateDot" class="state-dot"></span>
+        <span id="stateLabel" class="state-label" data-i18n="scroll.ready">READY</span>
+      </span>
+      <span id="modeTag" class="mode-tag" data-i18n="mode.standard">Adaptive Standard</span>
+      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">NO FEED SELECTED</span>
+    </section>
+    <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="scroll.progress">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+    <p id="statusDetail" class="status-detail" data-i18n="scroll.statusReady">Ready to scroll the LinkedIn feed.</p>
+  </header>
+
+  <!-- ── Tab strip: horizontal destinations ───────────────────────── -->
+  <nav class="tabstrip" aria-label="Primary" data-i18n-aria-label="dock.section">
+    <div class="tabstrip-tabs" role="tablist" aria-label="Extension sections" data-i18n-aria-label="tabs.section">
+      <button id="scrollTab" class="tab active" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="scrollView">
+        <span class="tab-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4v13m0 0 4.5-4.5M12 17l-4.5-4.5"></path>
+            <path d="M5 20h14"></path>
+          </svg>
+        </span>
+        <span class="tab-label" data-i18n="tabs.scroll">Scroll</span>
+      </button>
+      <button id="hiringTab" class="tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="hiringView">
+        <span class="tab-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.5" y="8" width="17" height="11.5" rx="2.5"></rect>
+            <path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8m-11.5 4.5h17"></path>
+          </svg>
+        </span>
+        <span class="tab-label" data-i18n="tabs.hiring">Hiring filter</span>
+        <span id="tabMatchCount" class="tab-count">0</span>
+      </button>
+    </div>
+    <button id="settingsToggle" class="settings-toggle" type="button" aria-expanded="false" aria-controls="settingsView" data-i18n-aria-label="settings.open" data-i18n-title="settings.open" aria-label="Open settings" title="Open settings">
+      <span class="tab-icon" aria-hidden="true">
+        <svg class="settings-gear" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.15"></circle>
+          <path d="M12 2.6a1.5 1.5 0 0 0-1.47 1.2l-.19.93a1.5 1.5 0 0 1-2.1 1.05l-.86-.4a1.5 1.5 0 0 0-1.83.42l-.66.83a1.5 1.5 0 0 0 .19 1.99l.7.62a1.5 1.5 0 0 1 0 2.28l-.7.62a1.5 1.5 0 0 0-.19 1.99l.66.83a1.5 1.5 0 0 0 1.83.42l.86-.4a1.5 1.5 0 0 1 2.1 1.05l.19.93a1.5 1.5 0 0 0 1.47 1.2h1.06a1.5 1.5 0 0 0 1.47-1.2l.19-.93a1.5 1.5 0 0 1 2.1-1.05l.86.4a1.5 1.5 0 0 0 1.83-.42l.66-.83a1.5 1.5 0 0 0-.19-1.99l-.7-.62a1.5 1.5 0 0 1 0-2.28l.7-.62a1.5 1.5 0 0 0 .19-1.99l-.66-.83a1.5 1.5 0 0 0-1.83-.42l-.86.4a1.5 1.5 0 0 1-2.1-1.05l-.19-.93A1.5 1.5 0 0 0 13.06 2.6Z"></path>
+        </svg>
+      </span>
+      <span class="tab-label" data-i18n="settings.nav">Settings</span>
+    </button>
+  </nav>
+
+  <!-- ── Workspace: the active task owns everything below the strip ── -->
+  <main class="workspace">
+    <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed to begin.</p>
+
+    <!-- First-run, local-privacy explainer (dismissed once) -->
+    <section id="onboarding" class="onboarding" aria-labelledby="onboardingTitle">
+      <h2 id="onboardingTitle" data-i18n="onboarding.title">Local, user-controlled assistance</h2>
+      <p data-i18n="onboarding.body">Linkerter scrolls and analyzes only the selected feed. It does not like, comment, connect, message, upload posts, or use an external AI service.</p>
+      <p data-i18n="onboarding.control">You choose the pace, limits, history mode, and exports. Hidden-tab work may be throttled by Chrome.</p>
+      <p data-i18n="onboarding.policy">Use responsibly and follow LinkedIn’s applicable terms. Review detections before acting on them.</p>
+      <button id="onboardingDismiss" class="button button-secondary" type="button" data-i18n="onboarding.dismiss">Got it</button>
+    </section>
+
+    <!-- Pane: run the scroller ─────────────────────────────────────── -->
+    <section id="scrollView" class="view active" role="tabpanel" aria-labelledby="scrollTab">
+      <section class="target-block" aria-label="Monitored LinkedIn tab" data-i18n-aria-label="target.section">
+        <p id="targetDetail" class="target-detail" data-i18n="target.detail">Choose a LinkedIn feed tab. The selected target is remembered when you reopen this popup.</p>
+        <div class="target-actions">
+          <button id="useActiveFeedBtn" class="button button-secondary" type="button" data-i18n="target.useActive">Use active feed tab</button>
+          <button id="returnToFeedBtn" class="button button-ghost" type="button" disabled="" data-i18n="target.return">Return to feed</button>
+        </div>
+      </section>
+
+      <div class="transport" aria-label="Scrolling controls" data-i18n-aria-label="scroll.controls">
+        <button id="startBtn" class="button button-primary button-hero" type="button" disabled="" data-i18n="scroll.start">Start scrolling</button>
+        <div class="segmented" role="group" aria-label="Pause or stop" data-i18n-aria-label="scroll.pauseStop">
+          <button id="pauseBtn" class="button button-secondary" type="button" disabled="" data-i18n="scroll.pause">Pause</button>
+          <button id="stopBtn" class="button button-stop" type="button" disabled="" data-i18n="scroll.stop">Stop</button>
+        </div>
+      </div>
+
+      <div class="view-hint">
+        <span class="view-hint-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3.1"></circle>
+            <path d="M12 3.2v2.2m0 13.2v2.2M3.2 12h2.2m13.2 0h2.2M5.9 5.9l1.6 1.6m9 9 1.6 1.6m0-12.2-1.6 1.6m-9 9-1.6 1.6"></path>
+          </svg>
+        </span>
+        <span data-i18n="scroll.hint">Pace, time and step limits are in Settings. Change them there and start again.</span>
+        <button class="link-button" type="button" data-view-jump="settings" data-i18n="scroll.goSettings">Open Settings</button>
+      </div>
+    </section>
+
+    <!-- Pane: hiring monitor + results ─────────────────────────────── -->
+    <section id="hiringView" class="view" role="tabpanel" aria-labelledby="hiringTab" hidden="">
+      <section class="panel detector-panel">
+        <div class="panel-heading">
+          <div class="panel-titles">
+            <h2 data-i18n="detector.title">Recruiting &amp; hiring</h2>
+          </div>
+          <span class="local-badge" data-i18n="detector.badge">NO AI</span>
+        </div>
+        <p class="detector-copy" data-i18n="detector.copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French, and Arabic while it is in the background. Chrome may throttle hidden tabs, and the feed tab must stay open.</p>
+        <button id="monitorBtn" class="button button-monitor" type="button" disabled="" data-i18n="monitor.start">Start hiring monitor</button>
+        <p id="monitorStatus" class="monitor-status" role="status" data-i18n="monitor.off">Monitor is off.</p>
+        <p id="domHealthStatus" class="dom-health" role="status" data-i18n="monitor.domPending">Feed DOM check pending.</p>
+        <div class="metric-grid" aria-label="Detected post counts" data-i18n-aria-label="metrics.aria">
+          <div class="metric"><strong id="openCount">0</strong><span data-i18n="category.open_role">Openings</span></div>
+          <div class="metric"><strong id="recruiterCount">0</strong><span data-i18n="category.recruiter_search">Recruiter searches</span></div>
+          <div class="metric"><strong id="possibleCount">0</strong><span data-i18n="category.possible">Possible matches</span></div>
+          <div class="metric"><strong id="relatedCount">0</strong><span data-i18n="category.other">Other related</span></div>
+        </div>
+        <p class="local-note" data-i18n="detector.localNote">Local keyword/context rules only. Review labels are private notes and never change detection; no role-title dictionary, uploads, or AI calls.</p>
+      </section>
+
+      <section class="panel results-panel" aria-labelledby="resultsTitle">
+        <div class="panel-heading">
+          <div class="panel-titles">
+            <h2 id="resultsTitle" data-i18n="results.title">Detected posts</h2>
+          </div>
+          <button id="exportBtn" class="button button-secondary" type="button" disabled="" data-i18n="export.json">Export JSON</button>
+        </div>
+
+        <div class="pipeline-bar">
+          <div class="pipeline-head">
+            <span class="pipeline-label" data-i18n="pipeline.track">Your pipeline</span>
+            <span id="pipelineDelta" class="pipeline-delta" role="status"></span>
+          </div>
+          <div id="pipelineChips" class="pipeline-chips" role="group" aria-label="Filter by pipeline stage" data-i18n-aria-label="pipeline.filterAria">
+            <button class="chip is-active" type="button" data-pipeline-filter="all" aria-pressed="true">
+              <span data-i18n="pipeline.all">All</span><span class="chip-count" data-pipeline-count="all">0</span>
+            </button>
+            <button class="chip" type="button" data-pipeline-filter="new" aria-pressed="false">
+              <span data-i18n="pipeline.new">New</span><span class="chip-count" data-pipeline-count="new">0</span>
+            </button>
+            <button class="chip" type="button" data-pipeline-filter="saved" aria-pressed="false">
+              <span data-i18n="pipeline.saved">Saved</span><span class="chip-count" data-pipeline-count="saved">0</span>
+            </button>
+            <button class="chip" type="button" data-pipeline-filter="applied" aria-pressed="false">
+              <span data-i18n="pipeline.applied">Applied</span><span class="chip-count" data-pipeline-count="applied">0</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="results-toolbar">
+          <div class="toolbar-field toolbar-grow">
+            <label class="field-label" for="resultSearch" data-i18n="results.search">Search detected posts</label>
+            <input id="resultSearch" class="select-control" type="search" autocomplete="off" placeholder="Search text, author, or signals" data-i18n-placeholder="results.search.placeholder">
+          </div>
+          <div class="toolbar-field">
+            <label class="field-label" for="categoryFilter" data-i18n="results.filter">Filter results</label>
+            <select id="categoryFilter" class="select-control">
+              <option value="all" data-i18n="results.all">All detected</option>
+              <option value="open_role" data-i18n="category.open_role">Openings</option>
+              <option value="recruiter_search" data-i18n="category.recruiter_search">Recruiter searches</option>
+              <option value="possible" data-i18n="category.possible">Possible matches</option>
+              <option value="job_seeker" data-i18n="category.job_seeker">Job seekers / referrals</option>
+              <option value="hiring_discussion" data-i18n="category.hiring_discussion">Hiring advice / news</option>
+              <option value="closed" data-i18n="category.closed">Closed / negative</option>
+            </select>
+          </div>
+          <div class="toolbar-field">
+            <label class="field-label" for="resultSort" data-i18n="results.sort">Result order</label>
+            <select id="resultSort" class="select-control">
+              <option value="relevance" selected="" data-i18n="results.relevance">Active openings first</option>
+              <option value="newest" data-i18n="results.newest">Newest first</option>
+              <option value="oldest" data-i18n="results.oldest">Oldest first</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pagination-controls" aria-label="Result pages">
+          <button id="previousPage" class="button button-secondary button-compact" type="button" disabled="" data-i18n="results.previous">Previous</button>
+          <span id="pageStatus" role="status">Page 1</span>
+          <button id="nextPage" class="button button-secondary button-compact" type="button" disabled="" data-i18n="results.next">Next</button>
+        </div>
+
+        <p id="processedDetail" class="processed-detail" data-i18n="results.processedInitial">Start the monitor to scan posts as you browse.</p>
+        <p id="exportStatus" class="export-status" data-i18n="export.initial">User-initiated local JSON or CSV. Choose fields and optionally export only the selected category.</p>
+
+        <div id="matchList" class="match-list">
+          <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">⌕</span>
+            <strong data-i18n="results.emptyTitle">No posts scanned yet</strong>
+            <span data-i18n="results.emptyDetail">Start the monitor to detect likely hiring posts.</span>
+          </div>
+        </div>
+        <section id="postDetail" class="post-detail" aria-label="Full post details" hidden="" data-i18n-aria-label="results.details"></section>
+      </section>
+    </section>
+
+    <!-- Pane: settings — replaces both panels while open ───────────── -->
+    <section id="settingsView" class="view settings-view" role="region" aria-labelledby="settingsViewTitle" hidden="">
+      <div class="settings-head">
+        <div class="panel-titles">
+          <h2 id="settingsViewTitle" data-i18n="settings.title">Settings</h2>
+        </div>
+        <button id="settingsDoneBtn" class="button button-primary button-compact" type="button" data-i18n="settings.done">Done</button>
+      </div>
+
+      <details class="settings-group" open="">
+        <summary>
+          <h3 id="settingsGeneralTitle" data-i18n="settings.general">General</h3>
+          <span class="summary-hint" data-i18n="settings.generalHelp">Language and interface preferences.</span>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <div class="field-row">
+            <label class="field-label" for="localeSelect" data-i18n="locale.label">Language</label>
+            <select id="localeSelect" class="select-control">
+              <option value="auto" data-i18n="locale.auto">Automatic</option>
+              <option value="en" data-i18n="locale.en">English</option>
+              <option value="fr" data-i18n="locale.fr">Français</option>
+              <option value="ar" data-i18n="locale.ar">العربية</option>
+              <option value="es" data-i18n="locale.es">Español</option>
+              <option value="de" data-i18n="locale.de">Deutsch</option>
+              <option value="pt" data-i18n="locale.pt">Português</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="themeSelect" data-i18n="theme.label">Appearance</label>
+            <select id="themeSelect" class="select-control">
+              <option value="auto" selected="" data-i18n="theme.auto">Match system</option>
+              <option value="light" data-i18n="theme.light">Light</option>
+              <option value="dark" data-i18n="theme.dark">Dark</option>
+            </select>
+          </div>
+          <p class="field-help" data-i18n="settings.appearanceHelp">Interface theme, language, and keyboard shortcuts.</p>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <h3 id="settingsCommandsTitle" data-i18n="commands.title">Keyboard shortcuts</h3>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <p class="field-help" data-i18n="commands.help">Shortcuts are handled by Chrome and work while the popup is closed.</p>
+          <dl class="shortcut-list">
+            <div class="shortcut-row">
+              <dt data-i18n="commands.openPopup">Open the popup</dt>
+              <dd><kbd id="shortcutOpenPopup">Ctrl+Shift+L</kbd></dd>
+            </div>
+            <div class="shortcut-row">
+              <dt data-i18n="commands.toggleMonitor">Start or stop the hiring monitor</dt>
+              <dd><kbd id="shortcutToggleMonitor">Ctrl+Shift+M</kbd></dd>
+            </div>
+            <div class="shortcut-row">
+              <dt data-i18n="commands.toggleScroll">Start or pause feed scrolling</dt>
+              <dd><kbd id="shortcutToggleScroll">Ctrl+Shift+S</kbd></dd>
+            </div>
+          </dl>
+          <button id="shortcutsBtn" class="button button-secondary button-compact" type="button" data-i18n="commands.customize">Change shortcuts</button>
+        </div>
+      </details>
+
+      <details class="settings-group" open="">
+        <summary>
+          <h3 id="paceTitle" data-i18n="pace.title">Smart pacing</h3>
+          <span id="safeBadge" class="safe-badge" data-i18n="pace.badge">AUTO-ADAPTIVE</span>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <div class="field-row">
+            <label class="field-label" for="modeSelect" data-i18n="pace.modeLabel">Adaptive mode</label>
+            <select id="modeSelect" class="select-control">
+              <option value="standard" data-i18n="mode.standard">Adaptive Standard</option>
+              <option value="fast" data-i18n="mode.fast">Adaptive Fast</option>
+              <option value="super_fast" data-i18n="mode.super_fast">Adaptive Super Fast</option>
+            </select>
+          </div>
+          <p id="modeDescription" class="field-help" data-i18n="pace.description">Adaptive movement and pauses are automatic. The selected feed keeps scrolling in the background; Chrome may throttle hidden tabs.</p>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <h3 id="limitsTitle" data-i18n="limits.title">Limits &amp; safeguards</h3>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <div class="two-fields">
+            <div class="field-row">
+              <label class="field-label" for="maxMinutes" data-i18n="limits.time">Time limit</label>
+              <select id="maxMinutes" class="select-control">
+                <option value="5" data-i18n="time.minutes" data-i18n-count="5">5 minutes</option>
+                <option value="15" selected="" data-i18n="time.minutes" data-i18n-count="15">15 minutes</option>
+                <option value="30" data-i18n="time.minutes" data-i18n-count="30">30 minutes</option>
+                <option value="60" data-i18n="time.minutes" data-i18n-count="60">60 minutes</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label class="field-label" for="maxSteps" data-i18n="limits.steps">Step limit</label>
+              <select id="maxSteps" class="select-control">
+                <option value="40" data-i18n="steps.count" data-i18n-count="40">40 steps</option>
+                <option value="80" data-i18n="steps.count" data-i18n-count="80">80 steps</option>
+                <option value="120" data-i18n="steps.count" data-i18n-count="120">120 steps</option>
+                <option value="180" selected="" data-i18n="steps.count" data-i18n-count="180">180 steps</option>
+                <option value="300" data-i18n="steps.count" data-i18n-count="300">300 steps</option>
+                <option value="500" data-i18n="steps.count" data-i18n-count="500">500 steps</option>
+              </select>
+            </div>
+          </div>
+          <label class="toggle-row" for="pauseOnInput">
+            <span class="toggle-copy"><strong data-i18n="limits.pauseInput">Pause on my input</strong><small data-i18n="limits.pauseInputHelp">Pause when you use the page.</small></span>
+            <input id="pauseOnInput" type="checkbox" checked="">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <h3 id="settingsDetectionTitle" data-i18n="settings.detection">Detection</h3>
+          <span class="summary-hint" data-i18n="settings.detectionHelp">How posts are expanded and filtered in the feed.</span>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <label class="toggle-row" for="autoExpand">
+            <span class="toggle-copy"><strong data-i18n="detector.autoExpand">Auto-expand visible long posts</strong><small data-i18n="detector.autoExpandHelp">Only while the hiring monitor is running.</small></span>
+            <input id="autoExpand" type="checkbox" checked="">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <label class="toggle-row" for="matchesOnly">
+            <span class="toggle-copy"><strong data-i18n="export.matchesOnly">Show selected matches in feed only</strong><small data-i18n="export.matchesOnlyHelp">While monitoring; stop to restore. Uncertain or partial posts stay visible.</small></span>
+            <input id="matchesOnly" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <h3 id="settingsHistoryTitle" data-i18n="settings.history">History</h3>
+          <span class="summary-hint" data-i18n="settings.historyHelp">Local post history is off by default.</span>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <div class="field-row">
+            <label class="field-label" for="historyMode" data-i18n="history.label">Save new post history</label>
+            <select id="historyMode" class="select-control">
+              <option value="off" data-i18n="history.off">Off — do not save new posts</option>
+              <option value="session" data-i18n="history.session">Browser session only</option>
+              <option value="persistent" data-i18n="history.persistent">Persistent on this device</option>
+            </select>
+          </div>
+          <input id="keepHistory" type="checkbox" hidden="">
+          <p class="field-help" data-i18n="history.help">Off by default. Changing mode never copies old records; exports can read both stores.</p>
+          <div class="two-fields">
+            <div class="field-row">
+              <label class="field-label" for="historyRetention" data-i18n="history.retention">Retention</label>
+              <select id="historyRetention" class="select-control">
+                <option value="7" data-i18n="history.days" data-i18n-count="7">7 days</option>
+                <option value="30" selected="" data-i18n="history.days" data-i18n-count="30">30 days</option>
+                <option value="90" data-i18n="history.days" data-i18n-count="90">90 days</option>
+              </select>
+            </div>
+            <div class="field-row field-row-end">
+              <button id="clearHistoryBtn" class="button button-secondary" type="button" disabled="" data-i18n="history.clear">Clear saved history</button>
+            </div>
+          </div>
+          <p id="historyStatus" class="history-status" data-i18n="history.offStatus">Local history is off.</p>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <h3 id="settingsExportTitle" data-i18n="settings.export">Export</h3>
+          <span class="summary-hint" data-i18n="settings.exportHelp">Choose format and fields for local downloads. Full text and emails are off by default.</span>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <div class="two-fields">
+            <div class="field-row">
+              <label class="field-label" for="exportFormat" data-i18n="export.format">File format</label>
+              <select id="exportFormat" class="select-control">
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+                <option value="html">HTML</option>
+                <option value="markdown">Markdown</option>
+              </select>
+            </div>
+          </div>
+          <label class="toggle-row" for="exportCurrentPageOnly">
+            <span class="toggle-copy"><strong data-i18n="export.currentPage">Export visible results only</strong><small data-i18n="export.currentPageHelp">Uses the posts shown on the current page; off exports the archive and history.</small></span>
+            <input id="exportCurrentPageOnly" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <label class="toggle-row" for="compactJson">
+            <span class="toggle-copy"><strong data-i18n="export.compactJson">Compact JSON</strong><small data-i18n="export.compactJsonHelp">One line instead of pretty-printed output.</small></span>
+            <input id="compactJson" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <label class="toggle-row" for="exportFilteredOnly">
+            <span class="toggle-copy"><strong data-i18n="export.selected">Export selected category only</strong><small data-i18n="export.selectedHelp">Uses the category filter above; off exports all detections.</small></span>
+            <input id="exportFilteredOnly" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <details class="export-field-options">
+            <summary data-i18n="export.fields">Choose fields to include</summary>
+            <div class="field-check-grid">
+              <label><input id="includeFullText" type="checkbox"> <span data-i18n="export.fullText">Full post text</span></label>
+              <label><input id="includeEmails" type="checkbox"> <span data-i18n="export.emails">Email addresses</span></label>
+              <label><input id="includeJobTitles" type="checkbox" checked=""> <span data-i18n="export.jobTitles">Job-title candidates</span></label>
+              <label><input id="includePostAge" type="checkbox" checked=""> <span data-i18n="export.postAge">Post age</span></label>
+              <label><input id="includeMetrics" type="checkbox" checked=""> <span data-i18n="export.metrics">Engagement metrics</span></label>
+              <label><input id="includePostMetadata" type="checkbox" checked=""> <span data-i18n="export.metadata">Author, links, hashtags</span></label>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="settings-group settings-danger">
+        <summary>
+          <h3 id="settingsDataTitle" data-i18n="settings.data">Local data</h3>
+          <span class="summary-hint" data-i18n="settings.dataHelp">Manage stored posts and diagnostics on this device.</span>
+          <span class="summary-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="group-body">
+          <div class="danger-actions">
+            <button id="clearAllDataBtn" class="button button-secondary" type="button" data-i18n="history.clearAll">Clear all local data</button>
+            <button id="diagnosticBtn" class="button button-secondary" type="button" data-i18n="history.diagnostic">Download sanitized diagnostic</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <footer class="app-footer">
+      <span data-i18n="footer.target">Selected feed stays pinned when you switch tabs</span>
+      <span class="footer-dot" aria-hidden="true">·</span>
+      <span data-i18n="footer.local">Local only</span>
+    </footer>
+  </main>
+
+  <script src="../../core/linkedin-shared.js"></script>
+  <script src="../../core/sha256.js"></script>
+  <script src="../../core/linkedin-hiring-rules.js"></script>
+  <script src="../../core/linkedin-hiring-classifier.js"></script>
+  <script src="../feed-monitor/linkedin-post-extract.js"></script>
+  <script src="popup-i18n.js"></script>
+  <script src="popup-locales.js"></script>
+  <script src="popup-store.js"></script>
+  <script src="popup-export.js"></script>
+  <script src="popup-results.js"></script>
+  <script src="popup.js"></script>
+</body></html>
