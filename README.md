@@ -63,7 +63,31 @@ The extension needs no build step; the sources are the runtime.
 ```powershell
 npm run preview:popup      # render features/popup/popup.html at its real 800x600 size in a plain tab
 npm test                   # zero-dependency node:test suite (Node >= 22)
+npm run eval               # measure the classifier against the labelled corpus
 ```
+
+### Measuring detection quality
+
+`tests/corpus/hiring-corpus.js` is a hand-labelled set of posts with the verdict each
+one should get. `scripts/eval-classifier.cjs` replays it through the real classifier and
+prints recall, precision, and every individual miss:
+
+```bash
+npm run eval                        # summary plus each failure
+node scripts/eval-classifier.cjs --json             # machine-readable
+node scripts/eval-classifier.cjs --fail-on-false-positive   # exit 1 if any non-vacancy fires
+```
+
+The corpus is **failure-biased on purpose**: it is written around the shapes that keep
+going wrong, not sampled from LinkedIn, so its rates are pessimistic and must not be
+quoted as real-world precision. Watch the deltas between two runs; treat the absolute
+numbers as a regression floor. When a real detection goes wrong, add the post — never
+delete a failing case to improve the score.
+
+A card whose text is not fully visible (an unexpanded "see more", a CSS clamp, or a body
+node that could not be located) is reported as `partial` rather than as a confident
+`none`; it is archived and listed for review, then replaced in place once the full text
+classifies definitively.
 
 ### Programmatic feed injection
 

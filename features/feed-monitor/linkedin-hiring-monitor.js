@@ -136,13 +136,17 @@
 
   function upsertExportRecord(root, details, classification, category) {
     const previousKey = archiveKeys.get(root);
-    if (category === "none" || category === "partial") {
+    if (category === "none") {
       if (previousKey) {
         archiveKeys.delete(root);
         decrementArchiveRootCount(previousKey);
       }
       return;
     }
+    // A partial card is NOT dropped any more. It used to be deleted here, which meant a post
+    // whose text was cut before the hiring phrase never reached the archive, the history or
+    // an export: it vanished with no trace. It is archived as `partial` so it can be
+    // reviewed, and it is replaced as soon as the full text classifies as something else.
     const candidateKey = getArchiveKey(root, details.text);
     const key = candidateKey.startsWith("text:") && previousKey ? previousKey : candidateKey;
     // E1: a post first seen while truncated is keyed by its partial text. When the same card
@@ -427,9 +431,12 @@
     const { classification, category } = cached;
     upsertExportRecord(root, details, classification, category);
 
-    if (category === "none" || category === "partial") {
+    if (category === "none") {
       results.delete(root);
     } else {
+      // `partial` is a real result row, not a suppressed one. The confidence field says the
+      // text was incomplete so the UI can mark it, and the row disappears by itself once the
+      // same card classifies as a definite category.
       results.set(root, {
         id: archiveKeys.get(root) || getArchiveKey(root, details.text),
         category,

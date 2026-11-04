@@ -158,6 +158,67 @@
       "(?<=\\s)و(?=\\p{L})"
     ],
 
+    // ── Compact vacancy pathway ────────────────────────────────────────────────
+    // A short ad often carries no opening predicate at all: "<title> - <city>.
+    // <email>". A role title alone is NEVER enough to call a post a vacancy (a
+    // person's headline looks the same), so these tables feed a compound rule that
+    // also requires actionable evidence. See classify() -> compactVacancy.
+    //
+    // Unicode-safe on purpose: JS \b is ASCII-only, so "Développeur" and "محاسب"
+    // never matched a \b-anchored phrase. Every source here uses a \p{L} lookbehind.
+    compactRole: [
+      // English
+      "developer", "developers", "engineer", "engineers", "designer", "designers",
+      "manager", "accountant", "technician", "sales", "agent", "agents", "nurse", "driver",
+      "analyst", "consultant", "architect", "assistant", "secretary", "receptionist",
+      "devops", "accountant", "cashier", "waiter", "cook", "security guard",
+      // French
+      "comptable", "développeur", "developpeur", "ingénieur", "ingenieur", "technicien",
+      "assistante", "assistant", "commercial", "commerciaux", "chauffeur", "secrétaire",
+      "secretaire", "caissier", "cuisinier", "serveur", "vendeur", "vendeuse",
+      // Arabic
+      "محاسب", "محاسبة", "مهندس", "مهندسة", "موظف", "موظفة", "سائق", "مطور", "مطورة",
+      "مبرمج", "مبرمجة", "بائع", "كاشير", "طباخ", "حارس", "سكرتير", "سكرتيرة"
+    ],
+
+    // Third-person "the employer is looking for X" predicates. First-person seeker forms
+    // ("I am looking for") are deliberately absent; the jobSeeker signal vetoes this path.
+    compactEmployerSeek: [
+      "is looking for", "are looking for", "is searching for", "are searching for",
+      "is seeking", "are seeking", "is hiring", "are hiring",
+      "recherche un", "recherche une", "recherchons un", "recherchons une",
+      "recrute un", "recrute une", "recrutons un", "recrutons une",
+      "est à la recherche d'un", "est à la recherche d'une",
+      "نبحث عن", "تبحث عن", "نرغب في"
+    ],
+
+    // Application cues. A bare "contact"/"email" is excluded on purpose: it matches the
+    // address itself ("contact@acme.dz") and marketing copy ("contact sales").
+    compactApplication: [
+      "apply", "apply now", "apply here", "apply by", "to apply",
+      "send cv", "send your cv", "send your resume", "send your application",
+      "dm me", "reach out to me", "email me", "message me", "contact me",
+      "postulez", "candidater", "candidature", "envoy", "par mail", "pour postuler",
+      "transmettez", "merci d'envoyer",
+      "أرسل", "ارسل", "ابعث", "سيرتك الذاتية", "للتقديم", "التقديم", "راسلني"
+    ],
+
+    // Explicit vacancy wording. Weak on its own; strong beside a role title.
+    compactVacancyWording: [
+      "poste à pourvoir", "postes à pourvoir", "position available", "positions available",
+      "opening", "openings", "vacancy", "vacant", "needed", "wanted", "urgent",
+      "شاغر", "شاغرة", "وظيفة", "منصب"
+    ],
+
+    // "<title> - <city>" is an ad convention. Used only as a supporting signal next to an
+    // e-mail address, never on its own.
+    compactPlaces: [
+      "alger", "algiers", "oran", "constantine", "annaba", "blida", "setif", "tlemcen",
+      "batna", "bejaia", "tizi ouzou", "djelfa", "biskra", "sidi bel abbes", "algerie",
+      "maroc", "casablanca", "rabat", "tunis", "tunisie", "paris", "lyon", "marseille",
+      "الجزائر", "وهران", "قسنطينة", "عنابة", "سطيف", "تلمسان", "بجاية", "المغرب", "تونس", "الدار البيضاء"
+    ],
+
     // Optional Algerian dialect / Arabizi spellings are deliberately weak and noisy signals.
     weakRegional: [
       "رانا نبحثو على", "رانا نقلبو على", "نقلبو على موظف", "نحتاجو موظف", "لي مهتم يبعث",
@@ -263,6 +324,12 @@
       "disponible immédiatement", "je cherche une alternance", "je cherche un stage",
       "je recherche un nouveau poste", "je recherche un poste", "je recherche un emploi",
       "je recherche activement", "je suis à l'écoute", "à l'écoute de nouvelles opportunités",
+      // Inflected first-person forms. Without these, "je cherche de nouvelles missions" was
+      // invisible, so a compact ad shaped like a CV slipped through the seeker veto.
+      // Deliberately first-person only: "en recherche active" is also how an employer
+      // describes its own hiring, so the bare form must not label a post as a candidate.
+      "je cherche de nouvelles missions", "cherche de nouvelles missions",
+      "je suis en recherche active", "en recherche active d'un",
       "à l'écoute du marché", "à la recherche de nouvelles opportunités", "je souhaite intégrer une entreprise",
       "disponible pour étudier toute opportunité", "je suis en recherche d'emploi", "recherche activement un poste",
       "i am looking for a new role", "i am looking for a new position", "i am looking for my next",

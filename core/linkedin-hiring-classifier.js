@@ -69,6 +69,27 @@
     ? new RegExp(conjunctionSources.join("|"), "gu")
     : null;
   const knownHashtags = new Set((compiledRules.hiringHashtags || []).map((entry) => entry.phrase));
+  // Compact-vacancy tables. The role list is matched with a Unicode lookbehind rather than
+  // \b, because JS \b is ASCII-only and silently fails on "Développeur" and "محاسب".
+  const compactMatchers = Object.fromEntries(
+    ["compactRole", "compactEmployerSeek", "compactApplication", "compactVacancyWording", "compactPlaces"]
+      .map((group) => {
+        const sources = (rules[group] || [])
+          .map((value) => escapeRegExp(normalizeText(value)))
+          .filter(Boolean);
+        return [group, sources.length
+          ? new RegExp(`(?<![\\p{L}\\p{N}])(?:${sources.join("|")})(?![\\p{L}\\p{N}])`, "u")
+          : null];
+      })
+  );
+  const compactMatches = (group, normalizedText) => {
+    const matcher = compactMatchers[group];
+    if (!matcher) return [];
+    // A fresh, non-global regex: `.test` on a /g regex advances lastIndex across calls.
+    const found = normalizedText.match(new RegExp(matcher.source, "gu"));
+    return found ? [...new Set(found)] : [];
+  };
+  const compactHits = (group, normalizedText) => compactMatches(group, normalizedText).length > 0;
   const localPart = "[a-z0-9.!#$%&'*+/=?^_`{|}~-]+";
   const domainPart = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   const emailPattern = new RegExp(`${localPart}@${domainPart}(?:\\.${domainPart})+`, "gi");
@@ -182,6 +203,9 @@
   // formula change updates the ceiling in one place.
   const OPEN_SCORE_MAX = 15;
   const RECRUITER_SCORE_MAX = 10;
+  // Floor reported for a compact-vacancy rescue: the score is a compound-evidence floor,
+  // not a point total from either formula above.
+  const COMPACT_SCORE_MAX = 5;
 
   function classify(text, options = {}) {    const normalized = normalizeText(text);
     const openingOccurrences = findOccurrences(normalized, "activeOpening");
@@ -313,7 +337,7 @@
     // A consumer must be able to read a bare score ("5.5 of what?"). The basis names the
     // formula that produced it and scoreMax is that formula's ceiling; both are null when
     // the final score was zeroed by a verdict branch (sponsored/no-signal/closed).
-    const scoreBasis = openScore >= recruiterScore
+    let scoreBasis = openScore >= recruiterScore
       ? (openScore > 0 ? "openScore" : null)
       : (recruiterScore > 0 ? "recruiterScore" : null);
 
@@ -388,6 +412,65 @@
       confidence = score >= 4 ? "review" : "low";
     }
 
+    // ── Compact vacancy rescue ─────────────────────────────────────────────────
+    // A short ad ("<title> - <city>. <email>") carries no opening predicate, so the branches
+    // above leave it at `none` (or at `possible` with a low score) even though it is a real
+    // vacancy. The rule is compound on purpose: a role title ALONE is never enough, because
+    // a person's headline is shaped exactly the same way.
+    //
+    //   A: role + employer-seek ("is looking for", "recherche un") + actionable evidence
+    //   B: role + e-mail + (application cue | vacancy wording | city)
+    //   C: role + vacancy wording + application cue
+    //   D: role + job link + application cue
+    //
+    // This only ever rescues a non-verdict. A post already classified `closed`,
+    // `hiring_discussion`, `job_seeker` or `recruiter_search` is never overridden.
+    let compactRoute = null;
+    let compactEvidence = [];
+    if (category === "none" || category === "possible") {
+      // A seeker advertises a city and an address too, so any seeker cue vetoes the whole
+      // path. This is a belt, not the braces: `jobSeekerHits && !openingHits &&
+      // !recruiterSearchHits` above normally claims these posts first, and a measured matrix
+      // showed no case where this veto alone changes a verdict. It stays because it is the
+      // documented contract — the compact path must never be the thing that turns a CV into a
+      // vacancy — and it becomes load-bearing the moment those upstream conditions change.
+      const seekerVeto = jobSeekerHits.length > 0;
+      if (!seekerVeto) {
+        const hasRole = compactHits("compactRole", normalized);
+        const hasSeek = compactHits("compactEmployerSeek", normalized);
+        const hasApplication = compactHits("compactApplication", normalized);
+        const hasVacancyWording = compactHits("compactVacancyWording", normalized);
+        const hasPlace = compactHits("compactPlaces", normalized);
+        const hasEmail = email.kind === "full";
+        const actionableEvidence = hasApplication || email.hit || emailLink || jobLink;
+        const routes = [
+          { letter: "A", hit: hasRole && hasSeek && actionableEvidence,
+            parts: ["compactRole", "compactEmployerSeek"] },
+          { letter: "B", hit: hasRole && hasEmail && (hasApplication || hasVacancyWording || hasPlace),
+            parts: ["compactRole"] },
+          { letter: "C", hit: hasRole && hasVacancyWording && hasApplication,
+            parts: ["compactRole", "compactVacancyWording", "compactApplication"] },
+          { letter: "D", hit: hasRole && jobLink && hasApplication,
+            parts: ["compactRole", "compactApplication"] }
+        ].filter((route) => route.hit);
+        if (routes.length) {
+          compactRoute = routes.map((route) => route.letter).join("");
+          // Show the phrases behind the route, so a reviewable row explains itself instead of
+          // asserting a vacancy from nothing the reader can check.
+          const groups = new Set(routes.flatMap((route) => route.parts));
+          compactEvidence = [...groups].flatMap((group) => compactMatches(group, normalized));
+        }
+      }
+    }
+    if (compactRoute) {
+      category = "open_role";
+      // Never "strong": this path inferred a vacancy from circumstantial evidence, and the
+      // consumer must be able to tell it apart from an explicit "we are hiring" statement.
+      confidence = "likely";
+      score = Math.max(score, 5);
+      scoreBasis = "compactScore";
+    }
+
     // Evidence display dedupes by (label, phrase): the same phrase firing twice is one
     // line, and the line carries no occurrence index. The structured evidenceDetail below
     // keeps every occurrence index for schema-v4 exports.
@@ -428,6 +511,12 @@
     addOccurrenceEvidence("Job-seeker cue", jobSeekerHits);
     addOccurrenceEvidence("Advice/news cue", adviceHits);
     addOccurrenceEvidence("Closed/negative cue", closedOccurrences);
+    if (compactRoute) {
+      // Name the route: "Compact vacancy (A)" tells a reviewer this was compound inference,
+      // not an explicit hiring statement, and which evidence combination produced it.
+      pushEvidence(`Compact vacancy (${compactRoute})`);
+      for (const phrase of compactEvidence) addEvidenceDetail("Compact vacancy", phrase, null);
+    }
     addOccurrenceEvidence("Role marker", roleMarkerHits);
     addOccurrenceEvidence("Contract term", contractHits);
     addOccurrenceEvidence("Sponsored/promoted placement", sponsoredHits);
@@ -468,7 +557,10 @@
       confidence,
       score: Math.round(score * 10) / 10,
       scoreBasis,
-      scoreMax: scoreBasis === "openScore" ? OPEN_SCORE_MAX : scoreBasis === "recruiterScore" ? RECRUITER_SCORE_MAX : null,
+      scoreMax: scoreBasis === "openScore" ? OPEN_SCORE_MAX
+        : scoreBasis === "recruiterScore" ? RECRUITER_SCORE_MAX
+          : scoreBasis === "compactScore" ? COMPACT_SCORE_MAX
+            : null,
       evidence: [...new Set(evidence)],
       evidenceDetail: [...evidenceDetailMap.values()],
       signals: {

@@ -387,22 +387,52 @@
     return inline || cleanText(visibleText(node));
   }
 
+  // A card can hide text without a "See more" control: LinkedIn also clamps with CSS
+  // (`line-clamp`, `max-height` + `overflow: hidden`). Without a control nothing told the
+  // monitor the text was cut, so a post whose hiring phrase sat below the fold was
+  // classified as a definite `none` and lost. These checks detect that visual truncation.
+  const CLAMP_CLASS = /line-clamp|truncat|ellipsis|clamp-/i;
+
+  function isVisuallyClamped(element) {
+    if (!element || typeof window === "undefined" || !window.getComputedStyle) return false;
+    const className = typeof element.className === "string" ? element.className : "";
+    if (CLAMP_CLASS.test(className)) return true;
+    try {
+      const style = window.getComputedStyle(element);
+      if (!style) return false;
+      // -webkit-line-clamp is reported on the modern property in current Chrome.
+      if (String(style.webkitLineClamp || style.lineClamp || "").trim() &&
+          String(style.webkitLineClamp || style.lineClamp).trim() !== "none") return true;
+      const overflow = String(style.overflowY || style.overflow || "");
+      if (/hidden|clip/.test(overflow)) {
+        // The element's content is taller than the box the reader can see.
+        const box = Number(style.maxHeight && style.maxHeight !== "none"
+          ? parseFloat(style.maxHeight)
+          : element.clientHeight);
+        const content = element.scrollHeight;
+        if (Number.isFinite(box) && Number.isFinite(content) && box > 0 && content > box + 4) return true;
+      }
+    } catch (_error) { /* a detached node cannot be measured; fall through */ }
+    return false;
+  }
+
   function getPostTextDetails(root) {
     const body = findBodyNode(root);
     const control = findSeeMore(root, body);
     const text = cleanText(nodeText(body) || "");
-    // Text counts as incomplete only while LinkedIn is still hiding some of it behind an
-    // unexpanded control. Using the card as the text scope is no longer treated as incomplete:
-    // with chrome removed structurally it yields the same body text.
-    const fullTextAvailableWithoutExpansion = !control && body !== root;
+    // Two independent reasons a post body may be incomplete: an unexpanded control, or a
+    // visual clamp that hides the rest without offering one.
+    const clamped = !control && isVisuallyClamped(body);
+    const fullTextAvailableWithoutExpansion = !control && !clamped && body !== root;
     return {
       text,
       control,
       body,
-      // Incomplete when LinkedIn is still hiding text behind a control, and also when the
-      // body node could not be located at all: card-scoped text is a guess, not a promise.
+      // Incomplete when text is hidden behind a control, when the body is visually clamped,
+      // and when the body node could not be located at all: card-scoped text is a guess.
       // `domHealth.textFallbacks` reports how often that guess is needed.
-      partial: Boolean(control) || body === root,
+      partial: Boolean(control) || clamped || body === root,
+      clamped,
       usedCardFallback: body === root,
       sponsored: isSponsoredCard(root),
       fullTextAvailableWithoutExpansion
@@ -974,7 +1004,7 @@
     isCardClassToken, isLikelyPostRoot, findPostRoot, findPostRootsInScope, deduplicateNestedRoots,
     collectPostRoots, POST_URN_PATTERN, ACTOR_SELECTOR, ACTOR_NAME_SELECTOR, isActorContainer,
     urnIn, postIdentityOf, urnFromHrefs, urnFromDescendants, resolveContentScope, belongsToPostRoot,
-    findSeeMore, findBodyNode, cleanText, CHROME_SELECTORS, SPONSORED_PATTERN, isSponsoredCard, isSponsoredText,
+    findSeeMore, findBodyNode, isVisuallyClamped, cleanText, CHROME_SELECTORS, SPONSORED_PATTERN, isSponsoredCard, isSponsoredText,
     visibleText, nodeText, getPostTextDetails, getHrefs, getStableId, extractJobTitleCandidates,
     extractHashtags, toAbsoluteHttpUrl, extractPostLinks, extractPostEmails, getPostPermalink, permalinkForUrn,
     getAuthorDetails, asciiDigits, ABSOLUTE_DATE_PATTERNS, parseAbsoluteDateMs, findAgeLabel,
