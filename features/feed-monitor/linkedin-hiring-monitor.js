@@ -19,7 +19,7 @@
     normalizeLabel, isSeeMoreControl, isElementVisible, isCardNearViewport, isLikelyPostRoot,
     findPostRoot, findPostRootsInScope, collectPostRoots, getStableId, getPostTextDetails,
     getHrefs, getPostPermalink, getAuthorDetails, getPostAge, parseMetricNumber, parseMetricCount,
-    getPostMetrics, getArchiveKey, createExportRecord, extractPostRecord
+    getPostMetrics, getArchiveKey, createExportRecord, extractPostRecord, isSponsoredCard
   } = extract;
 
   const MAX_RESULTS = 80;
@@ -60,9 +60,12 @@
   let monitorStartedAt = null;
   let monitorStoppedAt = null;
   let processedCount = 0;
+  // Sponsored cards skipped before extraction. Reported separately so "scanned" never
+  // counts advertising as a post the user could act on.
+  let sponsoredSkipped = 0;
   let keepHistory = false;
   let historyRetentionDays = 30;
-  let historyGeneration = 0;
+
   let historySaveTimer = null;
   let historySaveQueue = Promise.resolve();
   let historyLimitReached = false;
@@ -79,7 +82,13 @@
   const MONITOR_ID = globalThis.crypto?.randomUUID?.() || `feed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const classificationCache = new WeakMap();
   const dirtyRoots = new Set();
-  const scanStats = { scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0, lastScanMs: 0, totalScanMs: 0, maxScanMs: 0 };
+  const scanStats = {
+    scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0,
+    lastScanMs: 0, totalScanMs: 0, maxScanMs: 0,
+    // A scan that throws is counted and its message kept, so a stalled monitor is visible
+    // in diagnostics instead of silently stopping.
+    errors: 0, lastError: null
+  };
   let domHealth = {
     checks: 0,
     postRootsFound: 0,
@@ -267,13 +276,12 @@
   }
 
   function configureHistory(options = {}) {
-    const previousMode = historyMode;
     if (["off", "session", "persistent"].includes(options.historyMode)) historyMode = options.historyMode;
     else if (typeof options.keepHistory === "boolean") historyMode = options.keepHistory ? "persistent" : "off";
     keepHistory = historyMode !== "off";
     const requestedDays = Number(options.historyRetentionDays);
     if ([7, 30, 90].includes(requestedDays)) historyRetentionDays = requestedDays;
-    if (previousMode !== historyMode) historyGeneration += 1;
+
     if (!keepHistory) {
       pendingDelta.clear();
       clearTimeout(historySaveTimer);
@@ -366,6 +374,22 @@
 
   function updatePost(root, allowOffscreen = false) {
     if (!monitoring || !root.isConnected || (!allowOffscreen && !isCardNearViewport(root))) return;
+    // Sponsored placements are advertising, not posts: they are excluded before extraction,
+    // classification, filtering, archiving and history. The card also disappears from any
+    // previous result set, so turning this on never leaves a stale sponsored row behind.
+    if (isSponsoredCard(root)) {
+      sponsoredSkipped += 1;
+      seenRoots.delete(root);
+      results.delete(root);
+      const staleKey = archiveKeys.get(root);
+      if (staleKey) {
+        archiveKeys.delete(root);
+        decrementArchiveRootCount(staleKey);
+      }
+      classificationCache.delete(root);
+      dirtyRoots.delete(root);
+      return;
+    }
     if (!seenRoots.has(root)) {
       seenRoots.add(root);
       processedCount += 1;
@@ -556,6 +580,13 @@
         domHealth.message = `${roots.length} post card(s) matched; ${domHealth.scannedCards} inspected${background ? " in the background tab" : " near the viewport"}; text selectors ${domHealth.textSelectorMatches}, fallback ${domHealth.textFallbacks}, see-more controls ${domHealth.seeMoreControls}.`;
       }
       cleanDisconnectedResults();
+    } catch (error) {
+      // A DOM shape this build did not expect must not end the monitoring run. The failure
+      // is counted and surfaced in diagnostics instead of throwing away the next scan.
+      scanStats.errors += 1;
+      scanStats.lastError = String(error && error.message ? error.message : error).slice(0, 200);
+      domHealth.level = "warning";
+      domHealth.message = `Scan error #${scanStats.errors}: ${scanStats.lastError}. The next scan is still scheduled.`;
     } finally {
       const duration = Math.max(0, (globalThis.performance?.now?.() ?? Date.now()) - scanStartedAt);
       scanStats.lastScanMs = duration;
@@ -563,21 +594,41 @@
       scanStats.maxScanMs = Math.max(scanStats.maxScanMs, duration);
       scanning = false;
     }
+    // Rescheduling happens after the try/catch, never inside it, so a thrown error still
+    // reaches this line. A run of consecutive failures backs off instead of hot-looping.
     if (scanAgain) {
       scanAgain = false;
       scheduleScan(50);
-    } else scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800);
+    } else if (scanStats.errors > 0) {
+      scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800 * Math.min(4, scanStats.errors));
+    } else {
+      scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800);
+    }
   }
 
   function scheduleScan(delay = 250) {
     if (!monitoring || scheduledScan !== null) return;
     scheduledScan = setTimeout(() => {
       scheduledScan = null;
-      void scan();
+      // scan() catches its own body errors, so this catch only exists for a failure before
+      // that block (a missing DOM helper, a rejected await). Without it the rejection would
+      // be unhandled and the monitor would stop with no record of why.
+      scan().catch((error) => {
+        scanStats.errors += 1;
+        scanStats.lastError = String(error && error.message ? error.message : error).slice(0, 200);
+        scanning = false;
+        if (monitoring) scheduleScan(5_000);
+      });
     }, delay);
   }
 
   function markDirtyFromMutations(mutations) {
+    // dirtyRoots is a strong Set: a recycled card would otherwise keep its detached DOM
+    // subtree alive for the whole session. Sweep once per mutation batch, cheaply, and only
+    // when the set has grown enough to be worth the scan.
+    if (dirtyRoots.size > 200) {
+      for (const root of dirtyRoots) if (!root.isConnected) dirtyRoots.delete(root);
+    }
     for (const mutation of mutations) {
       const target = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
       const root = target ? findPostRoot(target) : null;
@@ -727,6 +778,7 @@
       activeFilter,
       matchesOnly,
       processedCount,
+      sponsoredSkipped,
       archiveCount: exportRecords.size,
       archiveLimit: MAX_EXPORT_RECORDS,
       archiveLimitReached,
@@ -777,10 +829,14 @@
       monitorStartedAt = new Date().toISOString();
       monitorStoppedAt = null;
       processedCount = 0;
+      sponsoredSkipped = 0;
       pendingDelta.clear();
       dirtyRoots.clear();
       historyError = null;
-      Object.assign(scanStats, { scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0, lastScanMs: 0, totalScanMs: 0, maxScanMs: 0 });
+      Object.assign(scanStats, {
+        scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0,
+        lastScanMs: 0, totalScanMs: 0, maxScanMs: 0, errors: 0, lastError: null
+      });
       domHealth = {
         checks: 0, postRootsFound: 0, scannedCards: 0, textSelectorMatches: 0,
         textFallbacks: 0, seeMoreControls: 0, postsWithAge: 0, postsWithMetrics: 0,

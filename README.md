@@ -7,9 +7,23 @@
 A zero-dependency Chrome MV3 extension that scrolls the LinkedIn feed at a
 human-comfortable pace and, while it does, classifies posts locally for hiring
 signals (openings, recruiter searches, job seekers, closed positions) in
-English, French, Arabic, Spanish, German and Portuguese. Everything is processed
+English, French and Arabic. Everything is processed
 and stored on-device: no remote code, no telemetry, no network calls beyond the
 tab the user is viewing.
+
+Detection scope is deliberately narrow:
+
+- **Three post languages** (English, French, Arabic). Spanish, German and
+  Portuguese vocabulary is not shipped, so those posts are ignored rather than
+  half-matched through a shared token.
+- **Sponsored and promoted placements are excluded entirely.** A promoted card
+  is advertising inventory, not a post, so it never enters the review queue, the
+  archive, the saved history, or an export — even when its text advertises a
+  vacancy.
+- **No Arabic month parsing.** Maghrebi and Mashriqi month names collide
+  (`شباط` is February in the Levant, January in Morocco), so an Arabic date label
+  is reported as unknown instead of being guessed into the wrong month. Post
+  ages are parsed for English and French only.
 
 ## Files
 
@@ -73,6 +87,11 @@ never ship.
 - Permissions: `storage` (local state), `scripting` (SPA feed injection fallback
   on linkedin.com), `activeTab` (explicit user gesture), plus a linkedin.com
   host permission for the content scripts.
+- Sponsored cards are discarded before extraction, so their text is never
+  classified, stored, or exported.
+- Distribution is local: the extension is installed unpacked or sideloaded. It is
+  **not** published to the Chrome Web Store, and the packager produces only the
+  sideload layout.
 
 ## License
 

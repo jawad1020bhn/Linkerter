@@ -7,8 +7,11 @@
  * The archive contains only files the manifest (plus the popup's own script/style
  * references) needs at runtime; development files under scripts/ and tests/ never ship.
  * It is byte-identical across runs and machines: fixed timestamps, fixed permissions,
- * sorted entry names and a single deflate level. The extension is installed unpacked or
- * sideloaded locally, so there is no store-upload variant.
+ * sorted entry names and a single deflate level.
+ *
+ * Distribution decision: Linkerter is installed unpacked or sideloaded locally. It is not
+ * uploaded to the Chrome Web Store, so there is deliberately no flat "manifest at the root"
+ * variant — the single nested folder keeps a local unpack tidy.
  *
  * This replaces the previous bash + python3 implementation, which needed a Python 3
  * interpreter that Windows does not ship by default.

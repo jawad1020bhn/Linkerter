@@ -303,6 +303,32 @@
     merged.metrics = mergeNullableObjects(older.metrics, latest.metrics);
     merged.postAge = mergeNullableObjects(older.postAge, latest.postAge);
     merged.extracted = mergeNullableObjects(older.extracted, latest.extracted);
+
+    // A verdict that changes between runs must leave a trace. Without this, a post seen as
+    // an opening and later re-read as closed/filled silently mutates in the history, and the
+    // exported record cannot explain why it moved. The history keeps one entry per distinct
+    // (category, confidence) pair, oldest first, capped so a re-scanned card cannot grow it
+    // without bound.
+    const previousVerdict = previous.category ? { category: previous.category, confidence: previous.confidence || null } : null;
+    const nextVerdict = latest.category ? { category: latest.category, confidence: latest.confidence || null } : null;
+    const historyEntries = Array.isArray(older.classificationHistory)
+      ? older.classificationHistory.filter((entry) => entry && typeof entry.category === "string")
+      : [];
+    const seenVerdicts = new Set(historyEntries.map((entry) => `${entry.category}|${entry.confidence || ""}`));
+    const appended = [...historyEntries];
+    for (const [verdict, source] of [[previousVerdict, previous], [nextVerdict, latest]]) {
+      if (!verdict) continue;
+      const key = `${verdict.category}|${verdict.confidence || ""}`;
+      if (seenVerdicts.has(key)) continue;
+      seenVerdicts.add(key);
+      appended.push({
+        category: verdict.category,
+        confidence: verdict.confidence,
+        at: source.lastSeenAt || source.firstSeenAt || null
+      });
+    }
+    if (appended.length > 1) merged.classificationHistory = appended.slice(-8);
+    else delete merged.classificationHistory;
     return merged;
   }
 

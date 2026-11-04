@@ -323,6 +323,9 @@
     "time", "[datetime]", "button", "[role='button']", "nav", "form", "input", "select", "textarea", "svg"
   ]);
 
+  // Sponsored and promoted cards are advertising inventory. They are dropped before
+  // classification, so they never reach the review queue, the archive, the saved history, or
+  // an export. There is no partial mode: a sponsored card is never a candidate.
   const SPONSORED_PATTERN = /(?:post|publication|annonce)\s+sponsoris|\bsponsored\b|\bpromoted\b|منشور\s+ممول|إعلان\s+ممول|\sممول\s/iu;
 
   function isSponsoredCard(root) {
@@ -333,6 +336,12 @@
       if (SPONSORED_PATTERN.test(label)) return true;
     }
     return false;
+  }
+
+  // A card's own text can carry a sponsored label even when no structural marker matched
+  // (localized labels, A/B markup). Checked against the body text before classification.
+  function isSponsoredText(text) {
+    return SPONSORED_PATTERN.test(String(text || ""));
   }
 
   function visibleText(node) {
@@ -575,20 +584,17 @@
   // 31 of 32 exported records had no age at all.
   const ABSOLUTE_DATE_PATTERNS = [
     /\b\d{1,2}\s+(?:janvier|janv|f[ée]vrier|f[ée]vr|fevrier|fev|mars|mar|avril|avr|mai|juin|juillet|juil|ao[ûu]t|septembre|sept|sep|octobre|oct|novembre|nov|d[ée]cembre|d[ée]c|dec)\.?(?![\p{L}])/iu,
-    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/iu,
-    /\b\d{1,2}\s+(?:يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر|كانون\s+الثاني|شباط|آذار|نيسان|أيّار|مايو|حزيران|تموز|آب|أيلول|تشرين\s+الأول|تشرين\s+الثاني|كانون\s+الأول)\b/u
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/iu
+    // Arabic month names are deliberately not parsed: the Maghrebi/Mashriqi month
+    // vocabularies overlap (شباط is February in the Levant and January in Morocco) and a
+    // duplicated name in the lookup table silently picked the wrong month. Without a
+    // locale signal the label stays unknown and the post age is reported as absent.
   ];
   const MONTH_INDEX = [
     [/^janv|^janvier|^jan/iu, 0], [/^f[ée]vr?|^fevr|^f[ée]vrier|^feb/iu, 1], [/^mars|^mar/iu, 2],
     [/^avr|^avril|^apr/iu, 3], [/^mai|^may/iu, 4], [/^juin|^jun/iu, 5], [/^juil|^jul/iu, 6],
     [/^ao[ûu]t|^aug/iu, 7], [/^sept?|^sep|^septembre/iu, 8], [/^oct|^octobre/iu, 9],
     [/^nov|^novembre/iu, 10], [/^d[ée]c|^dec|^d[ée]cembre/iu, 11]
-  ];
-  const ARABIC_MONTH_INDEX = [
-    [/يناير|كانون\s+الثاني|شباط/u, 0], [/فبراير|شباط/u, 1], [/مارس|آذار/u, 2], [/أبريل|نيسان|أيّار/u, 3],
-    [/مايو|أيّار|حزيران/u, 4], [/يونيو|حزيران/u, 5], [/يوليو|تموز/u, 6], [/أغسطس|آب/u, 7],
-    [/سبتمبر|أيلول/u, 8], [/أكتوبر|تشرين\s+الأول/u, 9], [/نوفمبر|تشرين\s+الثاني/u, 10],
-    [/ديسمبر|كانون\s+الأول/u, 11]
   ];
 
   // Absolute labels carry no year, so the most recent past occurrence of that month and day is
@@ -609,13 +615,8 @@
         for (const [pattern, index] of MONTH_INDEX) if (pattern.test(english[1])) { month = index; break; }
       }
     }
-    if (month === null) {
-      const arabic = text.match(/\b(\d{1,2})\s+(\S+(?:\s+\S+)?)/u);
-      if (arabic) {
-        day = Number(arabic[1]);
-        for (const [pattern, index] of ARABIC_MONTH_INDEX) if (pattern.test(arabic[2])) { month = index; break; }
-      }
-    }
+    // No Arabic-month fallback: the label parses or it does not, and an unparsed label is
+    // reported as unknown instead of being guessed into the wrong month.
     if (day === null || month === null || day < 1 || day > 31) return null;
     const captured = new Date(capturedAtMs);
     let candidate = Date.UTC(captured.getUTCFullYear(), month, day, 12, 0, 0);
@@ -634,12 +635,15 @@
       /\b(?:just now|a few seconds ago|yesterday)\b/iu,
       // A bare single-letter unit may only follow a digit: with "a|an" allowed in front, the
       // ordinary English word "and" parsed as "an" + "d" and was exported as a post age.
-      /\b\d+\s*(?:s|m|h|d|w|y|mo|yr|min|hr|hrs|wk|wks|yrs?)\b/iu,
-      /\b(?:a|an|one|two|three|four|five|ten|few|several|\d+)\s+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|wk|months?|years?|yrs?)\b/iu,
-      /\b(?:il y a\s+)?\d+\s*(?:secondes?|s|minutes?|min|heures?|h|jours?|j|semaines?|sem|mois|ans?|ann[ée]es?)\b/iu,
-      /\b(?:il y a\s+)?(?:un|une|deux|trois|quelques)\s+(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)\b/iu,
-      /(?:منذ\s*)?\d+\s*(?:ثانية|ثواني?|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|اسبوع|أسابيع|شهر|أشهر|سنة|سنوات)/u,
-      /(?:à l'instant|اليوم|أمس|الآن)/iu
+      // French short forms ("6 j", "13 h") and English single letters ("2 d") share the same
+      // shapes, so one combined list covers both before the long English word forms.
+      // \\b is ASCII-only, so it treats the "d" in "2 días" as a word end and exports a post
+      // age for a Spanish label. A Unicode letter/digit lookahead is the correct boundary.
+      /\b\d+\s*(?:s|m|h|d|w|y|mo|yr|min|hr|hrs|wk|wks|yrs?|j|sem)(?![\p{L}\p{N}])/iu,
+      /\b(?:a|an|one|two|three|four|five|ten|few|several|\d+)\s+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|wk|months?|years?|yrs?)(?![\p{L}\p{N}])/iu,
+      /\b(?:il y a\s+)?\d+\s*(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)(?![\p{L}\p{N}])/iu,
+      /\b(?:il y a\s+)?(?:un|une|deux|trois|quelques)\s+(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)(?![\p{L}\p{N}])/iu,
+      /(?:à l'instant)/iu
     ];
     for (const pattern of patterns) {
       const match = text.match(pattern);
@@ -648,23 +652,30 @@
     return null;
   }
 
+  // Unit table for English and French only. Each entry is matched against the whole unit
+  // token, never as a prefix: "6 j" is days while "1 mois" is a month, and a prefix test
+  // read "mois" as "m" (minutes) and "j" as nothing at all.
+  const AGE_UNITS = [
+    [["s", "sec", "secs", "second", "seconds", "seconde", "secondes"], 1],
+    [["m", "min", "mins", "minute", "minutes"], 60],
+    [["h", "hr", "hrs", "hour", "hours", "heure", "heures"], 3_600],
+    [["d", "day", "days", "jour", "jours", "j"], 86_400],
+    [["w", "wk", "wks", "week", "weeks", "sem", "semaine", "semaines"], 604_800],
+    [["mo", "month", "months", "mois"], 2_592_000],
+    [["y", "yr", "yrs", "year", "years", "an", "ans", "année", "années"], 31_536_000]
+  ].map(([tokens, seconds]) => [new Set(tokens), seconds]);
+
   function parseApproxAgeSeconds(label) {
     if (!label) return null;
     const normalized = classifier.normalizeText(asciiDigits(label));
-    if (/just now|a few seconds|a l instant|maintenant|الان|اليوم/u.test(normalized)) return 0;
-    if (/yesterday|hier|امس/u.test(normalized)) return 86_400;
+    if (/just now|a few seconds|a l instant|maintenant/u.test(normalized)) return 0;
+    if (/yesterday|hier/u.test(normalized)) return 86_400;
 
-    const numberMatch = normalized.match(/(?:il y a\s*|منذ\s*)?(\d+|un|une|a|an)\s*(.*)/u);
+    const numberMatch = normalized.match(/(?:il y a\s*)?(\d+|un|une|a|an)\s+(\S+)/u);
     if (!numberMatch) return null;
     const amount = /^\d+$/u.test(numberMatch[1]) ? Number(numberMatch[1]) : 1;
     const unit = numberMatch[2];
-    if (/^(?:s|sec|secs|second|seconds|seconde|secondes|ثانية|ثوان)/u.test(unit)) return amount;
-    if (/^(?:m|min|mins|minute|minutes|دقيقة|دقائق)/u.test(unit)) return amount * 60;
-    if (/^(?:h|hr|hrs|hour|hours|heure|heures|ساعة|ساعات)/u.test(unit)) return amount * 3600;
-    if (/^(?:d|day|days|jour|jours|يوم|أيام)/u.test(unit)) return amount * 86_400;
-    if (/^(?:w|wk|wks|week|weeks|semaine|semaines|أسبوع|أسابيع)/u.test(unit)) return amount * 604_800;
-    if (/^(?:mo|month|months|mois|شهر|أشهر)/u.test(unit)) return amount * 2_592_000;
-    if (/^(?:y|yr|yrs|year|years|an|ans|année|années|سنة|سنوات)/u.test(unit)) return amount * 31_536_000;
+    for (const [tokens, seconds] of AGE_UNITS) if (tokens.has(unit)) return amount * seconds;
     return null;
   }
 
@@ -938,7 +949,7 @@
     isCardClassToken, isLikelyPostRoot, findPostRoot, findPostRootsInScope, deduplicateNestedRoots,
     collectPostRoots, POST_URN_PATTERN, ACTOR_SELECTOR, ACTOR_NAME_SELECTOR, isActorContainer,
     urnIn, postIdentityOf, urnFromHrefs, urnFromDescendants, resolveContentScope, belongsToPostRoot,
-    findSeeMore, findBodyNode, cleanText, CHROME_SELECTORS, SPONSORED_PATTERN, isSponsoredCard,
+    findSeeMore, findBodyNode, cleanText, CHROME_SELECTORS, SPONSORED_PATTERN, isSponsoredCard, isSponsoredText,
     visibleText, nodeText, getPostTextDetails, getHrefs, getStableId, extractJobTitleCandidates,
     extractHashtags, toAbsoluteHttpUrl, extractPostLinks, extractPostEmails, getPostPermalink, permalinkForUrn,
     getAuthorDetails, asciiDigits, ABSOLUTE_DATE_PATTERNS, parseAbsoluteDateMs, findAgeLabel,

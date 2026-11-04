@@ -757,11 +757,15 @@ function renderHiringStatus(status) {
   const total = Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0);
   elements.tabMatchCount.textContent = total > 99 ? "99+" : String(total);
   renderPipelineBar(pipelineCountsFromStatus(status));
-  elements.processedDetail.textContent = monitoring
+  // Sponsored cards are skipped before extraction; saying so keeps the checked count honest
+  // instead of leaving the difference between "seen" and "processed" unexplained.
+  const sponsoredSkipped = Number(status.sponsoredSkipped) || 0;
+  const sponsoredSuffix = sponsoredSkipped > 0 ? ` ${t("results.sponsoredSkipped", { count: sponsoredSkipped })}` : "";
+  elements.processedDetail.textContent = (monitoring
     ? t("results.processedRunning", { checked: processedCount, archive: Number(status.archiveCount) || 0 })
     : processedCount > 0
       ? t("results.processedStopped", { count: processedCount })
-      : t("results.processedInitial");
+      : t("results.processedInitial")) + sponsoredSuffix;
   const archiveCount = Number(status.archiveCount) || 0;
   if (archiveCount || savedHistory.length) {
     elements.exportStatus.textContent = t(savedHistory.length ? "export.availableWithHistory" : "export.availableStopped", {

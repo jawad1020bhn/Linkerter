@@ -61,6 +61,13 @@
   const connectivePattern = connectiveSources.length
     ? new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${connectiveSources.join("|")})(?=$|[^\\p{L}\\p{N}])`, "gu")
     : null;
+  // Coordinating conjunctions are already regex sources: they need lookbehinds that escaped
+  // literal phrases cannot express ("و" may attach to the next word). They end a negation's
+  // scope but must not end a sentence — see buildClauseLocator.
+  const conjunctionSources = (rules.coordinatingConjunctions || []).filter(Boolean);
+  const conjunctionPattern = conjunctionSources.length
+    ? new RegExp(conjunctionSources.join("|"), "gu")
+    : null;
   const knownHashtags = new Set((compiledRules.hiringHashtags || []).map((entry) => entry.phrase));
   const localPart = "[a-z0-9.!#$%&'*+/=?^_`{|}~-]+";
   const domainPart = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -89,35 +96,31 @@
     return occurrences.sort((a, b) => a.index - b.index || b.length - a.length);
   }
 
-  // A negation only governs its own clause, so "Do not hesitate, we are hiring…" keeps
-  // its call. Boundary positions are every kept separator in the normalized text (commas
-  // now survive normalization) plus every connective end, and a hit is suppressed ONLY
-  // when the very clause containing it also carries an explicit closed/negative phrase.
-  // A bare negator word is not enough: "There is no doubt we are hiring…" holds no closed
-  // phrase, so the negator-like "no" alone must never fold the genuine call. The old
-  // fixed-width prefix window did exactly that and hid real openings.
-  // Clause connectives survive normalization as bare "-" when LinkedIn-style em-dashes or
-  // spaced short dashes separate the clauses ("hiring — but not juniors" normalizes to
-  // "hiring - but not juniors"). Parentheses and quotation marks never reach the normalized
-  // text (normalizeText replaces them with spaces), so only the spaced-hyphen form carries
-  // the boundary here; a hyphen inside a token ("full-time") never has both neighbours.
-  // The Arabic question mark and the headline pipe count as separators too: "توظيف | شروط:"
-  // headline posts are assembled from pipe-delimited sections, not one clause.
+  // Negation scope is a clause, and a clause ends at any of three things:
+  //   1. punctuation kept by normalizeText ("." "," ";" "!" "?" "|" and the Arabic marks),
+  //   2. a corrective connective ("but", "mais", "لكن"), which already reverses the statement,
+  //   3. a coordinating conjunction ("and", "et", "و"). "We are hiring engineers and not
+  //      hiring interns" advertises one role and withdraws another, so the conjunction must
+  //      end the negation's scope without acting as a barrier between the two roles.
+  // Connectives and conjunctions were previously one list, which is why a plain "and" did not
+  // stop a negation from swallowing the clause before it.
   const CLAUSE_BOUNDARY_CHARS = /[.!?;,؛،|؟]|\s-\s/gu;
-
 
   function buildClauseLocator(normalizedText) {
     const boundaries = [0];
     for (const match of normalizedText.matchAll(CLAUSE_BOUNDARY_CHARS)) {
       boundaries.push(match.index + 1);
     }
-    if (connectivePattern) {
-      connectivePattern.lastIndex = 0;
-      let connectiveMatch;
-      while ((connectiveMatch = connectivePattern.exec(normalizedText)) !== null) {
-        boundaries.push(connectiveMatch.index + connectiveMatch[0].length);
+    for (const pattern of [connectivePattern, conjunctionPattern]) {
+      if (!pattern) continue;
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(normalizedText)) !== null) {
+        boundaries.push(match.index + match[0].length);
+        // A zero-length match would never advance; every source here consumes text.
+        if (match[0].length === 0) pattern.lastIndex += 1;
       }
-      connectivePattern.lastIndex = 0;
+      pattern.lastIndex = 0;
     }
     // Ascending order makes the lookup below a short early-exit scan.
     boundaries.sort((a, b) => a - b);
@@ -216,8 +219,9 @@
     });
     const contactOccurrences = findOccurrences(normalized, "contactCues");
 
-    // A phrase hit dies only when its own clause also carries an explicit closed/negative
-    // phrase; location of the clause is decided once for the whole text.
+    // A phrase hit dies only when its own clause carries an explicit closed/negative phrase.
+    // Conjunctions split the negation clause, never the evidence: a role advertised in one
+    // clause survives a withdrawal in the next one.
     const clauseLocator = buildClauseLocator(normalized);
     function unnegated(occurrences) {
       return occurrences.filter((occurrence) => {
@@ -241,11 +245,32 @@
     const jobSeekerHits = unnegated(jobSeekerOccurrences);
     const adviceHits = unnegated(adviceOccurrences);
     const contactHits = unnegated(contactOccurrences);
-    // The monitor reports sponsored placements it detected structurally, so the guard still
-    // works once the sponsored label itself has been stripped from the post text as chrome.
+    // Sponsored and promoted placements are advertising inventory, not posts. The extractor
+    // already drops the card before classification; this guard covers callers that pass a
+    // sponsored flag or text carrying a sponsored label (imported text, tests, exports).
+    // There is no partial path: a sponsored placement is never a candidate, whatever it says.
     const sponsoredHits = options.sponsored === true && !sponsoredOccurrences.length
       ? [{ phrase: "sponsored", index: 0, length: 9 }]
       : sponsoredOccurrences;
+    if (sponsoredHits.length || options.sponsored === true) {
+      return {
+        category: "none",
+        confidence: "none",
+        score: 0,
+        scoreBasis: null,
+        scoreMax: null,
+        sponsored: true,
+        evidence: [`Sponsored/promoted placement ignored: ${(sponsoredHits[0] || { phrase: "sponsored" }).phrase}`],
+        evidenceDetail: [{ label: "Sponsored/promoted placement ignored", phrase: (sponsoredHits[0] || { phrase: "sponsored" }).phrase, occurrences: [0] }],
+        signals: {
+          activeOpening: false, ambiguousOpening: false, openingFrame: false,
+          regional: false, regionalMaghreb: false, regionalGulf: false, regionalLevant: false, regionalEgypt: false,
+          recruiterSearch: false, recruiterTerms: false, genericJobTerms: false, applicationCta: false,
+          jobSeeker: false, sponsored: true, roleMarker: false, contractTerms: false, adviceNews: false,
+          closed: false, email: "none", emailLink: false, contactCues: false, jobLink: false, hashtag: false
+        }
+      };
+    }
     const roleMarkerHits = roleMarkerOccurrences;
     const contractHits = contractOccurrences;
     const hashtagHits = extractHashtagHits(text);

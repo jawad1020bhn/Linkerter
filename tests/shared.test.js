@@ -118,6 +118,32 @@ test("mergePostRecords keeps partial text as partial and takes the longer body",
   assert.equal(merged.extractionStatus, "partial");
 });
 
+// A post that was an opening and is later re-read as closed must not mutate silently in
+// the history: the change is recorded so an export can explain why the verdict moved.
+test("mergePostRecords records a verdict change in classificationHistory", () => {
+  const previous = {
+    id: "urn:1", category: "open_role", confidence: "strong",
+    firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-02T00:00:00.000Z"
+  };
+  const next = {
+    id: "urn:1", category: "closed", confidence: "likely",
+    firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-09T00:00:00.000Z"
+  };
+  const merged = shared.mergePostRecords(previous, next);
+  assert.equal(merged.category, "closed");
+  assert.deepEqual(merged.classificationHistory.map((entry) => entry.category), ["open_role", "closed"]);
+  assert.equal(merged.classificationHistory[0].at, "2026-01-02T00:00:00.000Z");
+  assert.equal(merged.classificationHistory[1].at, "2026-01-09T00:00:00.000Z");
+});
+
+test("mergePostRecords does not grow classificationHistory on an unchanged verdict", () => {
+  const merged = shared.mergePostRecords(
+    { id: "urn:1", category: "open_role", confidence: "strong", lastSeenAt: "2026-01-01T00:00:00.000Z" },
+    { id: "urn:1", category: "open_role", confidence: "strong", lastSeenAt: "2026-01-02T00:00:00.000Z" }
+  );
+  assert.equal(Object.hasOwn(merged, "classificationHistory"), false);
+});
+
 test("pruneHistory drops expired records only when retention is enabled", () => {
   const now = Date.parse("2026-02-01T00:00:00.000Z");
   const old = { id: "urn:old", lastSeenAt: "2025-11-01T00:00:00.000Z" };
