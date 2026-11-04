@@ -24,7 +24,10 @@ const STATIC_ROOTS = [
   ["/features/", path.join(ROOT, "features")],
   ["/infrastructure/", path.join(ROOT, "infrastructure")]
 ];
-const HOST = process.env.PREVIEW_HOST || "0.0.0.0";
+// Loopback by default: this is a development server that serves the extension's own
+// HTML/JS/CSS, so there is no reason to expose it on every interface. Opt in explicitly
+// with PREVIEW_HOST=0.0.0.0 when a container or remote browser really needs it.
+const HOST = process.env.PREVIEW_HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || process.env.PREVIEW_PORT || 4173);
 
 const TYPES = {

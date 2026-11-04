@@ -29,6 +29,7 @@ const FILTERS = shared.FILTERS;
 // for unknown codes (older content scripts still send English sentences).
 const ERROR_NOTICE_KEYS = {
   open_feed: "notice.openFeedFirst",
+  open_surface: "notice.openFeedFirst",
   history_disabled: "notice.historyDisabled",
   storage_unavailable: "notice.storageUnavailable",
   quota_exceeded: "notice.quotaExceeded",
@@ -384,8 +385,14 @@ function isLinkedInUrl(url = "") {
   return shared.parseLinkedInUrl(url).isLinkedIn;
 }
 
-function isLinkedInFeedUrl(url = "") {
-  return shared.parseLinkedInUrl(url).isFeed;
+// "Post surface" = feed or search results. The old predicate accepted only the feed, so a
+// perfectly good search-results tab was refused as a target.
+function isLinkedInPostSurfaceUrl(url = "") {
+  return shared.parseLinkedInUrl(url).supportsPosts;
+}
+
+function surfaceLabel(surface) {
+  return t(surface === "search" ? "surface.search" : "surface.feed");
 }
 
 async function writeTargetForWindow(windowId, tabId) {
@@ -491,8 +498,8 @@ async function initializeTarget() {
     if (Number.isInteger(rememberedId)) {
       try {
         const rememberedTab = await chrome.tabs.get(rememberedId);
-        if (rememberedTab.windowId !== windowId || !isLinkedInFeedUrl(rememberedTab.url)) {
-          throw new Error("Remembered target moved or left the feed.");
+        if (rememberedTab.windowId !== windowId || !isLinkedInPostSurfaceUrl(rememberedTab.url)) {
+          throw new Error("Remembered target moved or left the supported pages.");
         }
         const status = await chrome.tabs.sendMessage(rememberedId, { type: shared.MESSAGE_TYPES.SCROLL.GET_STATUS });
         if (status?.isFeed) await setTargetTab(rememberedId, windowId, false);
@@ -757,11 +764,15 @@ function renderHiringStatus(status) {
   const total = Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0);
   elements.tabMatchCount.textContent = total > 99 ? "99+" : String(total);
   renderPipelineBar(pipelineCountsFromStatus(status));
-  elements.processedDetail.textContent = monitoring
+  // Sponsored cards are skipped before extraction; saying so keeps the checked count honest
+  // instead of leaving the difference between "seen" and "processed" unexplained.
+  const sponsoredSkipped = Number(status.sponsoredSkipped) || 0;
+  const sponsoredSuffix = sponsoredSkipped > 0 ? ` ${t("results.sponsoredSkipped", { count: sponsoredSkipped })}` : "";
+  elements.processedDetail.textContent = (monitoring
     ? t("results.processedRunning", { checked: processedCount, archive: Number(status.archiveCount) || 0 })
     : processedCount > 0
       ? t("results.processedStopped", { count: processedCount })
-      : t("results.processedInitial");
+      : t("results.processedInitial")) + sponsoredSuffix;
   const archiveCount = Number(status.archiveCount) || 0;
   if (archiveCount || savedHistory.length) {
     elements.exportStatus.textContent = t(savedHistory.length ? "export.availableWithHistory" : "export.availableStopped", {
@@ -1328,7 +1339,7 @@ async function initialize() {
     try {
       const tab = await chrome.tabs.get(requestedTabId);
       if (targetTabId !== requestedTabId) return;
-      if (!isLinkedInFeedUrl(tab.url)) throw new Error("Target left the feed");
+      if (!isLinkedInPostSurfaceUrl(tab.url)) throw new Error("Target left the supported post pages");
       const previousWindowId = targetWindowId;
       targetWindowId = tab.windowId;
       if (previousWindowId !== tab.windowId) {
@@ -1353,7 +1364,7 @@ async function initialize() {
     }
   });
   chrome.tabs.onUpdated?.addListener((tabId, changeInfo) => {
-    if (tabId === targetTabId && changeInfo?.url && !isLinkedInFeedUrl(changeInfo.url)) {
+    if (tabId === targetTabId && changeInfo?.url && !isLinkedInPostSurfaceUrl(changeInfo.url)) {
       void clearTargetTab();
       setGlobalNotice(t("notice.leftFeed"));
     }
@@ -1445,7 +1456,7 @@ const popupApi = {
   runMonitorCommand,
   runScrollCommand,
   setTargetTab,
-  isLinkedInFeedUrl,
+  isLinkedInPostSurfaceUrl,
   getTargetState: () => ({
     targetTabId,
     targetWindowId,

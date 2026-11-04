@@ -4,12 +4,35 @@
 > `linkedin-feed-scroller` (the project's original name); the product has since
 > been renamed to Linkerter. Both names refer to this extension.
 
-A zero-dependency Chrome MV3 extension that scrolls the LinkedIn feed at a
+A zero-dependency Chrome MV3 extension that scrolls LinkedIn at a
 human-comfortable pace and, while it does, classifies posts locally for hiring
 signals (openings, recruiter searches, job seekers, closed positions) in
-English, French, Arabic, Spanish, German and Portuguese. Everything is processed
+English, French and Arabic. Everything is processed
 and stored on-device: no remote code, no telemetry, no network calls beyond the
 tab the user is viewing.
+
+Supported pages:
+
+- **The home feed and feed views** (`/`, `/feed`, `/feed/*`).
+- **Search results** (`/search/results/*`): people, companies and content results carry the
+  same post cards, so the monitor reads them too.
+- **Not** `/jobs` or any other LinkedIn surface. Those are refused rather than half-working;
+  the manifest, the URL parser and the popup all agree on the same list, and a test pins them
+  to each other.
+
+Detection scope is deliberately narrow:
+
+- **Three post languages** (English, French, Arabic). Spanish, German and
+  Portuguese vocabulary is not shipped, so those posts are ignored rather than
+  half-matched through a shared token.
+- **Sponsored and promoted placements are excluded entirely.** A promoted card
+  is advertising inventory, not a post, so it never enters the review queue, the
+  archive, the saved history, or an export — even when its text advertises a
+  vacancy.
+- **No Arabic month parsing.** Maghrebi and Mashriqi month names collide
+  (`شباط` is February in the Levant, January in Morocco), so an Arabic date label
+  is reported as unknown instead of being guessed into the wrong month. Post
+  ages are parsed for English and French only.
 
 ## Files
 
@@ -17,7 +40,7 @@ tab the user is viewing.
 | --- | --- |
 | `manifest.json` | MV3 manifest (`activeTab`, `scripting`, `storage`) |
 | `core/linkedin-shared.js` | Shared primitives: URL canonicalization, history pruning limits, sanitizers |
-| `core/linkedin-hiring-rules.js` | Multilingual keyword/phrase tables for the classifier |
+| `core/linkedin-hiring-rules.js` | Keyword/phrase tables for the classifier (en/fr/ar) |
 | `core/linkedin-hiring-classifier.js` | Clause-aware hiring classifier (negation only suppresses its own clause) |
 | `features/feed-monitor/linkedin-post-extract.js` | Pure-DOM post extraction: card boundaries, identity, text, age, metrics |
 | `features/feed-monitor/linkedin-hiring-monitor.js` | Feed scanner orchestration: post roots, expansion, metrics, filtering, export archive |
@@ -40,7 +63,31 @@ The extension needs no build step; the sources are the runtime.
 ```powershell
 npm run preview:popup      # render features/popup/popup.html at its real 800x600 size in a plain tab
 npm test                   # zero-dependency node:test suite (Node >= 22)
+npm run eval               # measure the classifier against the labelled corpus
 ```
+
+### Measuring detection quality
+
+`tests/corpus/hiring-corpus.js` is a hand-labelled set of posts with the verdict each
+one should get. `scripts/eval-classifier.cjs` replays it through the real classifier and
+prints recall, precision, and every individual miss:
+
+```bash
+npm run eval                        # summary plus each failure
+node scripts/eval-classifier.cjs --json             # machine-readable
+node scripts/eval-classifier.cjs --fail-on-false-positive   # exit 1 if any non-vacancy fires
+```
+
+The corpus is **failure-biased on purpose**: it is written around the shapes that keep
+going wrong, not sampled from LinkedIn, so its rates are pessimistic and must not be
+quoted as real-world precision. Watch the deltas between two runs; treat the absolute
+numbers as a regression floor. When a real detection goes wrong, add the post — never
+delete a failing case to improve the score.
+
+A card whose text is not fully visible (an unexpanded "see more", a CSS clamp, or a body
+node that could not be located) is reported as `partial` rather than as a confident
+`none`; it is archived and listed for review, then replaced in place once the full text
+classifies definitively.
 
 ### Programmatic feed injection
 
@@ -73,6 +120,11 @@ never ship.
 - Permissions: `storage` (local state), `scripting` (SPA feed injection fallback
   on linkedin.com), `activeTab` (explicit user gesture), plus a linkedin.com
   host permission for the content scripts.
+- Sponsored cards are discarded before extraction, so their text is never
+  classified, stored, or exported.
+- Distribution is local: the extension is installed unpacked or sideloaded. It is
+  **not** published to the Chrome Web Store, and the packager produces only the
+  sideload layout.
 
 ## License
 

@@ -19,7 +19,7 @@
     normalizeLabel, isSeeMoreControl, isElementVisible, isCardNearViewport, isLikelyPostRoot,
     findPostRoot, findPostRootsInScope, collectPostRoots, getStableId, getPostTextDetails,
     getHrefs, getPostPermalink, getAuthorDetails, getPostAge, parseMetricNumber, parseMetricCount,
-    getPostMetrics, getArchiveKey, createExportRecord, extractPostRecord
+    getPostMetrics, getArchiveKey, createExportRecord, extractPostRecord, isSponsoredCard
   } = extract;
 
   const MAX_RESULTS = 80;
@@ -60,9 +60,12 @@
   let monitorStartedAt = null;
   let monitorStoppedAt = null;
   let processedCount = 0;
+  // Sponsored cards skipped before extraction. Reported separately so "scanned" never
+  // counts advertising as a post the user could act on.
+  let sponsoredSkipped = 0;
   let keepHistory = false;
   let historyRetentionDays = 30;
-  let historyGeneration = 0;
+
   let historySaveTimer = null;
   let historySaveQueue = Promise.resolve();
   let historyLimitReached = false;
@@ -79,7 +82,13 @@
   const MONITOR_ID = globalThis.crypto?.randomUUID?.() || `feed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const classificationCache = new WeakMap();
   const dirtyRoots = new Set();
-  const scanStats = { scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0, lastScanMs: 0, totalScanMs: 0, maxScanMs: 0 };
+  const scanStats = {
+    scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0,
+    lastScanMs: 0, totalScanMs: 0, maxScanMs: 0,
+    // A scan that throws is counted and its message kept, so a stalled monitor is visible
+    // in diagnostics instead of silently stopping.
+    errors: 0, lastError: null
+  };
   let domHealth = {
     checks: 0,
     postRootsFound: 0,
@@ -104,9 +113,15 @@
   });
   const STALE_OPENING_AGE_DAYS = 60;
 
-  function isFeedPage() {
-    return location.hostname === "www.linkedin.com" &&
-      (location.pathname === "/" || /^\/feed(?:\/|$)/.test(location.pathname));
+  // Post surfaces: the feed and search results. Delegated to the shared URL parser so the
+  // content script, the popup and the service worker cannot disagree about what is
+  // supported. The old local copy hardcoded only "/" and "/feed".
+  function isPostSurface() {
+    return shared.parseLinkedInUrl(location.href).supportsPosts;
+  }
+
+  function currentSurface() {
+    return shared.parseLinkedInUrl(location.href).surface;
   }
 
   function decrementArchiveRootCount(key) {
@@ -121,13 +136,17 @@
 
   function upsertExportRecord(root, details, classification, category) {
     const previousKey = archiveKeys.get(root);
-    if (category === "none" || category === "partial") {
+    if (category === "none") {
       if (previousKey) {
         archiveKeys.delete(root);
         decrementArchiveRootCount(previousKey);
       }
       return;
     }
+    // A partial card is NOT dropped any more. It used to be deleted here, which meant a post
+    // whose text was cut before the hiring phrase never reached the archive, the history or
+    // an export: it vanished with no trace. It is archived as `partial` so it can be
+    // reviewed, and it is replaced as soon as the full text classifies as something else.
     const candidateKey = getArchiveKey(root, details.text);
     const key = candidateKey.startsWith("text:") && previousKey ? previousKey : candidateKey;
     // E1: a post first seen while truncated is keyed by its partial text. When the same card
@@ -179,7 +198,8 @@
     const posts = Array.from(exportRecords.values()).sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       ok: true,
       schemaVersion: shared.SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
@@ -267,13 +287,12 @@
   }
 
   function configureHistory(options = {}) {
-    const previousMode = historyMode;
     if (["off", "session", "persistent"].includes(options.historyMode)) historyMode = options.historyMode;
     else if (typeof options.keepHistory === "boolean") historyMode = options.keepHistory ? "persistent" : "off";
     keepHistory = historyMode !== "off";
     const requestedDays = Number(options.historyRetentionDays);
     if ([7, 30, 90].includes(requestedDays)) historyRetentionDays = requestedDays;
-    if (previousMode !== historyMode) historyGeneration += 1;
+
     if (!keepHistory) {
       pendingDelta.clear();
       clearTimeout(historySaveTimer);
@@ -366,6 +385,22 @@
 
   function updatePost(root, allowOffscreen = false) {
     if (!monitoring || !root.isConnected || (!allowOffscreen && !isCardNearViewport(root))) return;
+    // Sponsored placements are advertising, not posts: they are excluded before extraction,
+    // classification, filtering, archiving and history. The card also disappears from any
+    // previous result set, so turning this on never leaves a stale sponsored row behind.
+    if (isSponsoredCard(root)) {
+      sponsoredSkipped += 1;
+      seenRoots.delete(root);
+      results.delete(root);
+      const staleKey = archiveKeys.get(root);
+      if (staleKey) {
+        archiveKeys.delete(root);
+        decrementArchiveRootCount(staleKey);
+      }
+      classificationCache.delete(root);
+      dirtyRoots.delete(root);
+      return;
+    }
     if (!seenRoots.has(root)) {
       seenRoots.add(root);
       processedCount += 1;
@@ -396,9 +431,12 @@
     const { classification, category } = cached;
     upsertExportRecord(root, details, classification, category);
 
-    if (category === "none" || category === "partial") {
+    if (category === "none") {
       results.delete(root);
     } else {
+      // `partial` is a real result row, not a suppressed one. The confidence field says the
+      // text was incomplete so the UI can mark it, and the row disappears by itself once the
+      // same card classifies as a definite category.
       results.set(root, {
         id: archiveKeys.get(root) || getArchiveKey(root, details.text),
         category,
@@ -508,7 +546,7 @@
 
   async function scan() {
     if (!monitoring) return;
-    if (!isFeedPage()) {
+    if (!isPostSurface()) {
       await stopMonitor();
       return;
     }
@@ -556,6 +594,13 @@
         domHealth.message = `${roots.length} post card(s) matched; ${domHealth.scannedCards} inspected${background ? " in the background tab" : " near the viewport"}; text selectors ${domHealth.textSelectorMatches}, fallback ${domHealth.textFallbacks}, see-more controls ${domHealth.seeMoreControls}.`;
       }
       cleanDisconnectedResults();
+    } catch (error) {
+      // A DOM shape this build did not expect must not end the monitoring run. The failure
+      // is counted and surfaced in diagnostics instead of throwing away the next scan.
+      scanStats.errors += 1;
+      scanStats.lastError = String(error && error.message ? error.message : error).slice(0, 200);
+      domHealth.level = "warning";
+      domHealth.message = `Scan error #${scanStats.errors}: ${scanStats.lastError}. The next scan is still scheduled.`;
     } finally {
       const duration = Math.max(0, (globalThis.performance?.now?.() ?? Date.now()) - scanStartedAt);
       scanStats.lastScanMs = duration;
@@ -563,21 +608,41 @@
       scanStats.maxScanMs = Math.max(scanStats.maxScanMs, duration);
       scanning = false;
     }
+    // Rescheduling happens after the try/catch, never inside it, so a thrown error still
+    // reaches this line. A run of consecutive failures backs off instead of hot-looping.
     if (scanAgain) {
       scanAgain = false;
       scheduleScan(50);
-    } else scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800);
+    } else if (scanStats.errors > 0) {
+      scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800 * Math.min(4, scanStats.errors));
+    } else {
+      scheduleScan(document.visibilityState !== "visible" ? 5_000 : 1_800);
+    }
   }
 
   function scheduleScan(delay = 250) {
     if (!monitoring || scheduledScan !== null) return;
     scheduledScan = setTimeout(() => {
       scheduledScan = null;
-      void scan();
+      // scan() catches its own body errors, so this catch only exists for a failure before
+      // that block (a missing DOM helper, a rejected await). Without it the rejection would
+      // be unhandled and the monitor would stop with no record of why.
+      scan().catch((error) => {
+        scanStats.errors += 1;
+        scanStats.lastError = String(error && error.message ? error.message : error).slice(0, 200);
+        scanning = false;
+        if (monitoring) scheduleScan(5_000);
+      });
     }, delay);
   }
 
   function markDirtyFromMutations(mutations) {
+    // dirtyRoots is a strong Set: a recycled card would otherwise keep its detached DOM
+    // subtree alive for the whole session. Sweep once per mutation batch, cheaply, and only
+    // when the set has grown enough to be worth the scan.
+    if (dirtyRoots.size > 200) {
+      for (const root of dirtyRoots) if (!root.isConnected) dirtyRoots.delete(root);
+    }
     for (const mutation of mutations) {
       const target = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
       const root = target ? findPostRoot(target) : null;
@@ -720,13 +785,15 @@
     const page = queryRecords(archive, { ...query, filter: query.filter || activeFilter });
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       ok: true,
       monitoring,
       autoExpand,
       activeFilter,
       matchesOnly,
       processedCount,
+      sponsoredSkipped,
       archiveCount: exportRecords.size,
       archiveLimit: MAX_EXPORT_RECORDS,
       archiveLimitReached,
@@ -753,7 +820,12 @@
 
   function startMonitor(options = {}) {
     reconcileFilterArtifacts();
-    if (!isFeedPage()) return { supported: true, isFeed: false, ok: false, error: "open_feed", message: "Open the LinkedIn feed first." };
+    if (!isPostSurface()) {
+      return {
+        supported: true, isFeed: false, surface: null, ok: false,
+        error: "open_surface", message: "Open a LinkedIn feed or search results page first."
+      };
+    }
     const nextFilter = typeof options.filter === "string" ? options.filter : activeFilter;
     const nextMatchesOnly = options.matchesOnly === true;
     if (activeFilter !== nextFilter || matchesOnly !== nextMatchesOnly) restoreHiddenPosts();
@@ -777,10 +849,14 @@
       monitorStartedAt = new Date().toISOString();
       monitorStoppedAt = null;
       processedCount = 0;
+      sponsoredSkipped = 0;
       pendingDelta.clear();
       dirtyRoots.clear();
       historyError = null;
-      Object.assign(scanStats, { scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0, lastScanMs: 0, totalScanMs: 0, maxScanMs: 0 });
+      Object.assign(scanStats, {
+        scans: 0, batches: 0, classifications: 0, cacheHits: 0, dirtyProcessed: 0,
+        lastScanMs: 0, totalScanMs: 0, maxScanMs: 0, errors: 0, lastError: null
+      });
       domHealth = {
         checks: 0, postRootsFound: 0, scannedCards: 0, textSelectorMatches: 0,
         textFallbacks: 0, seeMoreControls: 0, postsWithAge: 0, postsWithMetrics: 0,
@@ -831,7 +907,8 @@
     const flushed = await flushHistoryDelta(true);
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       ok: flushed?.ok !== false,
       ...(flushed?.ok === false ? { error: flushed.error || "storage_unavailable" } : {}),
       status: getStatus()
@@ -848,7 +925,8 @@
     matchesOnly = nextMatchesOnly;
     if (monitoring && matchesOnly) ensureFilterStyle();
     if (monitoring) scheduleScan(50);
-    return { supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() };
+    return { supported: true, isFeed: isPostSurface(),
+      surface: currentSurface(), ok: true, status: getStatus() };
   }
 
   const monitorApi = {
@@ -912,7 +990,8 @@
         matchesOnly = nextMatchesOnly;
         if (monitoring && matchesOnly) ensureFilterStyle();
         if (monitoring) scheduleScan(50);
-        sendResponse({ supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() });
+        sendResponse({ supported: true, isFeed: isPostSurface(),
+      surface: currentSurface(), ok: true, status: getStatus() });
         return false;
       }
       case shared.MESSAGE_TYPES.HIRING.SET_PIPELINE:
@@ -921,7 +1000,8 @@
           baselineAt: message.baselineAt,
           filter: message.filter
         });
-        sendResponse({ supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() });
+        sendResponse({ supported: true, isFeed: isPostSurface(),
+      surface: currentSurface(), ok: true, status: getStatus() });
         return false;
       default:
         return false;

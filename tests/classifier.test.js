@@ -70,6 +70,43 @@ test("negation only suppresses its own clause", () => {
   assert.equal(result.signals.activeOpening, true);
 });
 
+// A conjunction ends the negation's scope without ending the sentence: the advertised role
+// in the first clause must survive the withdrawn role in the second. Earlier behaviour
+// reported `closed / 0` here, silently dropping a real opening.
+test("a conjunction ends negation scope but keeps the advertised role", () => {
+  for (const text of [
+    "We are hiring engineers and not hiring interns.",
+    "We are hiring engineers and are not hiring interns.",
+    "We're hiring a backend developer and we don't hire interns. CV: jobs@x.com",
+    "Nous recrutons des ingénieurs et ne recrutons pas de stagiaires. CV: jobs@x.com",
+    "مطلوب مهندس للعمل في وهران ولا نبحث عن متدربين. أرسل سيرتك الذاتية إلى jobs@x.com"
+  ]) {
+    const result = classify(text);
+    assert.equal(result.category, "open_role", text);
+    assert.equal(result.signals.activeOpening, true, text);
+  }
+});
+
+test("a conjunction does not turn a fully withdrawn post into an opening", () => {
+  const result = classify("We are not hiring engineers and not hiring interns. Position filled.");
+  assert.equal(result.category, "closed");
+  assert.equal(result.signals.activeOpening, false);
+});
+
+test("Arabic closed phrasings are recognized in both numbers", () => {
+  for (const text of ["لا توجد وظيفة شاغرة", "لا توجد وظائف شاغرة", "لا شاغر حاليا"]) {
+    const result = classify(text);
+    assert.equal(result.category, "closed", text);
+    assert.equal(result.signals.closed, true, text);
+  }
+});
+
+test("a conjunction inside a role name does not split a genuine negation", () => {
+  const result = classify("We are not hiring for research and development roles. The position has been filled.");
+  assert.equal(result.category, "closed");
+  assert.equal(result.signals.activeOpening, false);
+});
+
 test("a first-person job seeker post is not an opening", () => {
   const result = classify("I'm open to work. Looking for my next role in data analytics.");
   assert.equal(result.category, "job_seeker");
@@ -96,11 +133,6 @@ test("a sponsored placement that names no vacancy is not detected", () => {
   assert.equal(result.score, 0);
 });
 
-test("a sponsored placement that names a vacancy keeps its classification", () => {
-  const result = classify("Sponsored: We're hiring a Data Analyst.", { sponsored: true });
-  assert.equal(result.category, "open_role");
-});
-
 test("email detection separates full addresses from @domain fragments", () => {
   assert.equal(classifier.detectEmail("write to jane.doe@example.com").kind, "full");
   assert.equal(classifier.detectEmail("apply @acme.com").kind, "partial");
@@ -123,130 +155,97 @@ test("an empty post has no signal and no evidence", () => {
   assert.equal(result.scoreMax, null);
 });
 
-// ── Spanish, German and Portuguese ────────────────────────────────
-// The classifier ships rule tables for Spanish, German and Portuguese posts, so the
-// same evidence that promotes an English or French post has to promote these too.
+// ── Language scope: English, French, Arabic only ──────────────────
+// The rule tables carry exactly three languages. A Spanish, German or Portuguese post must
+// not be half-recognised through a stray shared token ("jobs", "job"), so the contract is
+// asserted from the other side: the vocabulary is gone and the post does not become an
+// opening.
 
-test("Spanish hiring post with a contact address is a strong opening", () => {
-  const result = classify("Estamos contratando un desarrollador backend en Madrid. Envía tu CV a rrhh@empresa.es");
-  assert.equal(result.category, "open_role");
-  assert.equal(result.confidence, "strong");
-  assert.equal(result.signals.activeOpening, true);
-  assert.equal(result.signals.email, "full");
-  assert.equal(result.signals.contactCues, true);
+test("the rule tables declare English, French and Arabic only", () => {
+  assert.deepEqual(rules.supportedLanguages, ["en", "fr", "ar"]);
 });
 
-test("Spanish article-less headlines still count as openings", () => {
+test("unsupported-language hiring posts are not openings", () => {
   for (const text of [
+    "Estamos contratando un desarrollador backend en Madrid. Envía tu CV a rrhh@empresa.es",
     "Buscamos comercial para nuestra delegación de Sevilla.",
     "Se busca camarero para restaurante en Valencia, jornada completa.",
-    "Se necesita dependiente/a con experiencia en tienda."
-  ]) {
-    assert.equal(classify(text).category, "open_role", text);
-  }
-});
-
-test("Spanish marketing copy that uses the same verbs is not an opening", () => {
-  for (const text of [
-    "Buscamos la excelencia en cada proyecto.",
-    "Buscamos mejorar la experiencia de nuestros clientes."
+    "Wir stellen ein: Senior Java Entwickler (m/w/d) in Berlin. Bewerbung an jobs@firma.de",
+    "Gesucht: Pflegefachkraft (m/w/d) in Hamburg",
+    "Wir suchen Verstärkung für unser Team in München. Jetzt bewerben!",
+    "Estamos a contratar um programador Python em Lisboa. Envie seu currículo para vagas@empresa.pt",
+    "Vaga para designer gráfico no Porto.",
+    "Procura-se empregado de mesa para restaurante no centro."
   ]) {
     assert.notEqual(classify(text).category, "open_role", text);
   }
 });
 
-test("Spanish job seeker, recruiter search and closed posts are separated", () => {
-  assert.equal(classify("Estoy en búsqueda activa de empleo como analista de datos.").category, "job_seeker");
-  assert.equal(classify("Busco trabajo en marketing digital, tengo cinco años de experiencia.").category, "job_seeker");
-  assert.equal(classify("Reclutador buscando candidatos para puesto en fintech.").category, "recruiter_search");
-  const closed = classify("Ya no estamos contratando para este puesto. Vacante cubierta.");
-  assert.equal(closed.category, "closed");
-  assert.equal(closed.signals.closed, true);
-  assert.equal(closed.signals.activeOpening, false);
+test("unsupported-language seeker, closed and advice posts are not classified", () => {
+  assert.notEqual(classify("Estoy en búsqueda activa de empleo como analista de datos.").category, "job_seeker");
+  assert.notEqual(classify("Ich suche eine neue Stelle als Data Engineer.").category, "job_seeker");
+  assert.notEqual(classify("Estou em busca de uma nova oportunidade como product manager.").category, "job_seeker");
+  for (const text of [
+    "Ya no estamos contratando para este puesto. Vacante cubierta.",
+    "Keine offenen Stellen mehr, die Position ist besetzt.",
+    "Não há vagas no momento, a vaga foi preenchida."
+  ]) {
+    assert.equal(classify(text).category, "none", text);
+    assert.equal(classify(text).signals.closed, false, text);
+  }
+  assert.notEqual(classify("5 consejos de contratación: cómo entrevistar mejor.").category, "hiring_discussion");
+  assert.notEqual(classify("Tipps zur Einstellung: So führst du bessere Interviews.").category, "hiring_discussion");
 });
 
-test("Spanish hiring advice stays commentary", () => {
-  const result = classify("5 consejos de contratación: cómo entrevistar mejor.");
-  assert.equal(result.category, "hiring_discussion");
-  assert.equal(result.signals.adviceNews, true);
+test("unsupported-language job boards and hashtags are not recognised", () => {
+  // The board hosts are gone from jobLinkPatterns. The generic "/jobs/" path in the
+  // stepstone URL still matches — that pattern is language-neutral and shared with the
+  // English boards — so the assertion is that the localized host alone proves nothing.
+  for (const [text, href, stillGeneric] of [
+    ["Buscamos comercial", "https://www.infojobs.net/oferta/1", false],
+    ["Wir stellen ein: Backend Engineer", "https://www.stepstone.de/jobs/1", true],
+    ["Vaga para designer", "https://www.catho.com.br/vagas/1", false]
+  ]) {
+    const result = classify(text, { hrefs: [href] });
+    assert.equal(result.signals.jobLink, stillGeneric, href);
+    assert.notEqual(result.category, "open_role", href);
+  }
+  for (const text of ["Estamos contratando #empleo", "Wir stellen ein #stellenangebot", "Contratamos #vagas"]) {
+    const result = classify(text);
+    assert.equal(result.signals.hashtag, false, text);
+    assert.notEqual(result.category, "open_role", text);
+  }
+});
+
+// ── Sponsored placements are never candidates ────────────────────
+// A promoted placement is advertising inventory. It is excluded in the extractor before
+// classification, and this guard covers direct callers that pass a flag or labelled text.
+
+test("a sponsored placement is rejected even when it advertises a vacancy", () => {
+  const result = classify("Sponsored: We're hiring a Data Analyst.", { sponsored: true });
+  assert.equal(result.category, "none");
+  assert.equal(result.confidence, "none");
+  assert.equal(result.score, 0);
+  assert.equal(result.sponsored, true);
+  assert.equal(result.signals.sponsored, true);
   assert.equal(result.signals.activeOpening, false);
 });
 
-test("German hiring post with (m/w/d) is an opening", () => {
-  const result = classify("Wir stellen ein: Senior Java Entwickler (m/w/d) in Berlin. Bewerbung an jobs@firma.de");
-  assert.equal(result.category, "open_role");
-  assert.equal(result.confidence, "strong");
-  assert.equal(result.signals.activeOpening, true);
-  assert.equal(result.signals.roleMarker, true);
-  assert.equal(result.signals.email, "full");
+test("a sponsored flag alone rejects a plain vacancy without a sponsored label", () => {
+  const result = classify("We're hiring a backend engineer. Apply by email: jobs@acme.com", { sponsored: true });
+  assert.equal(result.category, "none");
+  assert.equal(result.score, 0);
 });
 
-test("German headline and call-to-action forms are openings", () => {
-  assert.equal(classify("Gesucht: Pflegefachkraft (m/w/d) in Hamburg").category, "open_role");
-  assert.equal(classify("Wir suchen Verstärkung für unser Team in München. Jetzt bewerben!").category, "open_role");
-  assert.equal(classify("Freie Stelle: Pflegefachkraft in Hamburg.").category, "open_role");
-});
-
-test("German job seeker and closed posts are separated", () => {
-  assert.equal(classify("Ich suche eine neue Stelle als Data Engineer. Offen für neue Möglichkeiten.").category, "job_seeker");
-  const closed = classify("Keine offenen Stellen mehr, die Position ist besetzt.");
-  assert.equal(closed.category, "closed");
-  assert.equal(closed.signals.closed, true);
-});
-
-test("German hiring advice stays commentary", () => {
-  const result = classify("Tipps zur Einstellung: So führst du bessere Interviews.");
-  assert.equal(result.category, "hiring_discussion");
-  assert.equal(result.signals.adviceNews, true);
-});
-
-test("Portuguese hiring post with a contact address is a strong opening", () => {
-  const result = classify("Estamos a contratar um programador Python em Lisboa. Envie seu currículo para vagas@empresa.pt");
-  assert.equal(result.category, "open_role");
-  assert.equal(result.confidence, "strong");
-  assert.equal(result.signals.activeOpening, true);
-  assert.equal(result.signals.email, "full");
-  assert.equal(result.signals.applicationCta, true);
-  assert.equal(result.signals.contactCues, true);
-});
-
-test("Portuguese headline forms are openings", () => {
-  assert.equal(classify("Vaga para designer gráfico no Porto.").category, "open_role");
-  assert.equal(classify("Procura-se empregado de mesa para restaurante no centro.").category, "open_role");
-  assert.equal(classify("Procuramos um/uma designer gráfico para a nossa equipa.").category, "open_role");
-});
-
-test("Portuguese job seeker and closed posts are separated", () => {
-  assert.equal(classify("Estou em busca de uma nova oportunidade como product manager.").category, "job_seeker");
-  const closed = classify("Não há vagas no momento, a vaga foi preenchida.");
-  assert.equal(closed.category, "closed");
-  assert.equal(closed.signals.closed, true);
-});
-
-test("Portuguese hiring advice stays commentary", () => {
-  const result = classify("Dicas de contratação: como fazer entrevistas melhores.");
-  assert.equal(result.category, "hiring_discussion");
-  assert.equal(result.signals.adviceNews, true);
-});
-
-test("Spanish, German and Portuguese job boards and hashtags are recognized", () => {
-  for (const [text, href] of [
-    ["Buscamos comercial", "https://www.infojobs.net/oferta/1"],
-    ["Wir stellen ein: Backend Engineer", "https://www.stepstone.de/jobs/1"],
-    ["Vaga para designer", "https://www.catho.com.br/vagas/1"]
-  ]) {
-    const result = classify(text, { hrefs: [href] });
-    assert.equal(result.signals.jobLink, true, href);
-    assert.equal(result.category, "open_role", href);
-  }
-  for (const [text, expected] of [
-    ["Estamos contratando #empleo", "empleo"],
-    ["Wir stellen ein #stellenangebot", "stellenangebot"],
-    ["Contratamos #vagas", "vagas"]
+test("the sponsored guard also catches the label in the post text", () => {
+  for (const text of [
+    "We're hiring a backend engineer. Promoted post.",
+    "منشور ممول: مطلوب مهندس للعمل في وهران. أرسل سيرتك الذاتية.",
+    "Nous recrutons un ingénieur. Publication sponsorisée."
   ]) {
     const result = classify(text);
-    assert.equal(result.signals.hashtag, true, expected);
-    assert.equal(result.category, "open_role", expected);
+    assert.equal(result.category, "none", text);
+    assert.equal(result.sponsored, true, text);
   }
 });
 

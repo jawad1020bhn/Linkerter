@@ -74,10 +74,22 @@
   // (`__description-wrapper`, `__content`, `__actor`, `__social-actions`) are parts of that
   // card. Treating them as cards made one post produce several roots, several archive
   // records, and inflated category counts.
+  // Card-level classes only. Search results reuse LinkedIn's update component under their own
+  // wrapper (`search-results__update`), so both families are matched here.
+  //
+  // The `__` guard keeps BEM *children* (`feed-shared-update-v2__description-wrapper`) from
+  // counting as cards. `search-results__update` is itself the wrapper, not a child, so that
+  // exact name is matched before the guard runs — treating it as a child made every search
+  // result invisible.
+  const SEARCH_CARD_TOKENS = Object.freeze(["search-results__update", "search-results__update-wrapper"]);
+
   function isCardClassToken(token) {
-    if (!token || token.includes("__")) return false;
+    if (!token) return false;
+    if (SEARCH_CARD_TOKENS.includes(token)) return true;
+    if (token.includes("__")) return false;
     return token === "feed-shared-update-v2" || token === "occludable-update" ||
-      /feed[-\w]*(?:update|post)|(?:post|update)[-\w]*card|card[-\w]*(?:post|update)/.test(token);
+      /feed[-\w]*(?:update|post)|(?:post|update)[-\w]*card|card[-\w]*(?:post|update)/.test(token) ||
+      /search[-\w]*(?:update|post)|(?:update|post)[-\w]*search/.test(token);
   }
 
   function isLikelyPostRoot(element) {
@@ -92,7 +104,11 @@
     const postUrn = /urn:li:(activity|share|ugcpost):/i.test(urn) || /urn:li:(activity|share|ugcpost):/i.test(dataId);
     const feedView = /feed.*(update|post)|(update|post).*feed/.test(viewName);
     const feedTestId = /feed.*(update|post)|(update|post).*feed/.test(testId);
-    return element.tagName === "ARTICLE" || role === "article" || knownCardClass || postUrn || feedView || feedTestId || isFeedListItem(element);
+    // Search results carry the same post component but their own view/test identifiers.
+    const searchView = /search.*(update|post|result)|(update|post).*search/.test(viewName);
+    const searchTestId = /search.*(update|post|result)|(update|post).*search/.test(testId);
+    return element.tagName === "ARTICLE" || role === "article" || knownCardClass || postUrn ||
+      feedView || feedTestId || searchView || searchTestId || isFeedListItem(element);
   }
 
   function findPostRoot(element) {
@@ -108,9 +124,14 @@
 
   function findPostRootsInScope(scope) {
     if (!scope) return [];
-    const selector = "article,[role='article'],[role='listitem'],[data-urn],[data-id*='urn:li:'],[data-view-name*='feed']," +
-      "[class*='feed-shared-update-v2'],[class*='occludable-update'],[class*='feed-post'],[class*='feed-update']," +
-      "[class*='post-card'],[class*='update-card'],[data-test-id*='feed-update'],[data-test-id*='feed-post']";
+    // One selector list for both surfaces: LinkedIn renders feed and search-results posts with
+    // the same update component, so the candidates are the same; findPostRoot() then validates
+    // each candidate against the card rules above.
+    const selector = "article,[role='article'],[role='listitem'],[data-urn],[data-id*='urn:li:']," +
+      "[data-view-name*='feed'],[data-view-name*='search'],[class*='feed-shared-update-v2']," +
+      "[class*='occludable-update'],[class*='feed-post'],[class*='feed-update']," +
+      "[class*='search-results__update'],[class*='search-update'],[class*='post-card'],[class*='update-card']," +
+      "[data-test-id*='feed-update'],[data-test-id*='feed-post'],[data-test-id*='search-update']";
     const candidates = scope.querySelectorAll(selector);
     const roots = new Set();
     for (const candidate of candidates) {
@@ -123,9 +144,13 @@
   function collectPostRoots() {
     const scope = document.querySelector("[role='main'],main") || document.body;
     const roots = findPostRootsInScope(scope);
-    // LinkedIn sometimes places the feed cards outside its current <main> wrapper.
-    if (!roots.length && scope && scope !== document.body) return findPostRootsInScope(document.body);
-    return roots;
+    if (scope === document.body) return roots;
+    // LinkedIn sometimes places cards outside its current <main> wrapper, and search results
+    // append further pages outside it. The old code only fell back to document.body when
+    // <main> held no cards at all, so a page with some inside and some outside silently lost
+    // the outside ones. Merge both scopes and deduplicate instead.
+    const elsewhere = findPostRootsInScope(document.body).filter((root) => !roots.includes(root));
+    return elsewhere.length ? deduplicateNestedRoots([...roots, ...elsewhere]) : roots;
   }
 
   const POST_URN_PATTERN = /urn:li:(?:activity|share|ugcPost|jobPosting|job):[\w-]+/i;
@@ -323,6 +348,9 @@
     "time", "[datetime]", "button", "[role='button']", "nav", "form", "input", "select", "textarea", "svg"
   ]);
 
+  // Sponsored and promoted cards are advertising inventory. They are dropped before
+  // classification, so they never reach the review queue, the archive, the saved history, or
+  // an export. There is no partial mode: a sponsored card is never a candidate.
   const SPONSORED_PATTERN = /(?:post|publication|annonce)\s+sponsoris|\bsponsored\b|\bpromoted\b|منشور\s+ممول|إعلان\s+ممول|\sممول\s/iu;
 
   function isSponsoredCard(root) {
@@ -333,6 +361,12 @@
       if (SPONSORED_PATTERN.test(label)) return true;
     }
     return false;
+  }
+
+  // A card's own text can carry a sponsored label even when no structural marker matched
+  // (localized labels, A/B markup). Checked against the body text before classification.
+  function isSponsoredText(text) {
+    return SPONSORED_PATTERN.test(String(text || ""));
   }
 
   function visibleText(node) {
@@ -353,22 +387,52 @@
     return inline || cleanText(visibleText(node));
   }
 
+  // A card can hide text without a "See more" control: LinkedIn also clamps with CSS
+  // (`line-clamp`, `max-height` + `overflow: hidden`). Without a control nothing told the
+  // monitor the text was cut, so a post whose hiring phrase sat below the fold was
+  // classified as a definite `none` and lost. These checks detect that visual truncation.
+  const CLAMP_CLASS = /line-clamp|truncat|ellipsis|clamp-/i;
+
+  function isVisuallyClamped(element) {
+    if (!element || typeof window === "undefined" || !window.getComputedStyle) return false;
+    const className = typeof element.className === "string" ? element.className : "";
+    if (CLAMP_CLASS.test(className)) return true;
+    try {
+      const style = window.getComputedStyle(element);
+      if (!style) return false;
+      // -webkit-line-clamp is reported on the modern property in current Chrome.
+      if (String(style.webkitLineClamp || style.lineClamp || "").trim() &&
+          String(style.webkitLineClamp || style.lineClamp).trim() !== "none") return true;
+      const overflow = String(style.overflowY || style.overflow || "");
+      if (/hidden|clip/.test(overflow)) {
+        // The element's content is taller than the box the reader can see.
+        const box = Number(style.maxHeight && style.maxHeight !== "none"
+          ? parseFloat(style.maxHeight)
+          : element.clientHeight);
+        const content = element.scrollHeight;
+        if (Number.isFinite(box) && Number.isFinite(content) && box > 0 && content > box + 4) return true;
+      }
+    } catch (_error) { /* a detached node cannot be measured; fall through */ }
+    return false;
+  }
+
   function getPostTextDetails(root) {
     const body = findBodyNode(root);
     const control = findSeeMore(root, body);
     const text = cleanText(nodeText(body) || "");
-    // Text counts as incomplete only while LinkedIn is still hiding some of it behind an
-    // unexpanded control. Using the card as the text scope is no longer treated as incomplete:
-    // with chrome removed structurally it yields the same body text.
-    const fullTextAvailableWithoutExpansion = !control && body !== root;
+    // Two independent reasons a post body may be incomplete: an unexpanded control, or a
+    // visual clamp that hides the rest without offering one.
+    const clamped = !control && isVisuallyClamped(body);
+    const fullTextAvailableWithoutExpansion = !control && !clamped && body !== root;
     return {
       text,
       control,
       body,
-      // Incomplete when LinkedIn is still hiding text behind a control, and also when the
-      // body node could not be located at all: card-scoped text is a guess, not a promise.
+      // Incomplete when text is hidden behind a control, when the body is visually clamped,
+      // and when the body node could not be located at all: card-scoped text is a guess.
       // `domHealth.textFallbacks` reports how often that guess is needed.
-      partial: Boolean(control) || body === root,
+      partial: Boolean(control) || clamped || body === root,
+      clamped,
       usedCardFallback: body === root,
       sponsored: isSponsoredCard(root),
       fullTextAvailableWithoutExpansion
@@ -575,20 +639,17 @@
   // 31 of 32 exported records had no age at all.
   const ABSOLUTE_DATE_PATTERNS = [
     /\b\d{1,2}\s+(?:janvier|janv|f[ée]vrier|f[ée]vr|fevrier|fev|mars|mar|avril|avr|mai|juin|juillet|juil|ao[ûu]t|septembre|sept|sep|octobre|oct|novembre|nov|d[ée]cembre|d[ée]c|dec)\.?(?![\p{L}])/iu,
-    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/iu,
-    /\b\d{1,2}\s+(?:يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر|كانون\s+الثاني|شباط|آذار|نيسان|أيّار|مايو|حزيران|تموز|آب|أيلول|تشرين\s+الأول|تشرين\s+الثاني|كانون\s+الأول)\b/u
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/iu
+    // Arabic month names are deliberately not parsed: the Maghrebi/Mashriqi month
+    // vocabularies overlap (شباط is February in the Levant and January in Morocco) and a
+    // duplicated name in the lookup table silently picked the wrong month. Without a
+    // locale signal the label stays unknown and the post age is reported as absent.
   ];
   const MONTH_INDEX = [
     [/^janv|^janvier|^jan/iu, 0], [/^f[ée]vr?|^fevr|^f[ée]vrier|^feb/iu, 1], [/^mars|^mar/iu, 2],
     [/^avr|^avril|^apr/iu, 3], [/^mai|^may/iu, 4], [/^juin|^jun/iu, 5], [/^juil|^jul/iu, 6],
     [/^ao[ûu]t|^aug/iu, 7], [/^sept?|^sep|^septembre/iu, 8], [/^oct|^octobre/iu, 9],
     [/^nov|^novembre/iu, 10], [/^d[ée]c|^dec|^d[ée]cembre/iu, 11]
-  ];
-  const ARABIC_MONTH_INDEX = [
-    [/يناير|كانون\s+الثاني|شباط/u, 0], [/فبراير|شباط/u, 1], [/مارس|آذار/u, 2], [/أبريل|نيسان|أيّار/u, 3],
-    [/مايو|أيّار|حزيران/u, 4], [/يونيو|حزيران/u, 5], [/يوليو|تموز/u, 6], [/أغسطس|آب/u, 7],
-    [/سبتمبر|أيلول/u, 8], [/أكتوبر|تشرين\s+الأول/u, 9], [/نوفمبر|تشرين\s+الثاني/u, 10],
-    [/ديسمبر|كانون\s+الأول/u, 11]
   ];
 
   // Absolute labels carry no year, so the most recent past occurrence of that month and day is
@@ -609,13 +670,8 @@
         for (const [pattern, index] of MONTH_INDEX) if (pattern.test(english[1])) { month = index; break; }
       }
     }
-    if (month === null) {
-      const arabic = text.match(/\b(\d{1,2})\s+(\S+(?:\s+\S+)?)/u);
-      if (arabic) {
-        day = Number(arabic[1]);
-        for (const [pattern, index] of ARABIC_MONTH_INDEX) if (pattern.test(arabic[2])) { month = index; break; }
-      }
-    }
+    // No Arabic-month fallback: the label parses or it does not, and an unparsed label is
+    // reported as unknown instead of being guessed into the wrong month.
     if (day === null || month === null || day < 1 || day > 31) return null;
     const captured = new Date(capturedAtMs);
     let candidate = Date.UTC(captured.getUTCFullYear(), month, day, 12, 0, 0);
@@ -634,12 +690,15 @@
       /\b(?:just now|a few seconds ago|yesterday)\b/iu,
       // A bare single-letter unit may only follow a digit: with "a|an" allowed in front, the
       // ordinary English word "and" parsed as "an" + "d" and was exported as a post age.
-      /\b\d+\s*(?:s|m|h|d|w|y|mo|yr|min|hr|hrs|wk|wks|yrs?)\b/iu,
-      /\b(?:a|an|one|two|three|four|five|ten|few|several|\d+)\s+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|wk|months?|years?|yrs?)\b/iu,
-      /\b(?:il y a\s+)?\d+\s*(?:secondes?|s|minutes?|min|heures?|h|jours?|j|semaines?|sem|mois|ans?|ann[ée]es?)\b/iu,
-      /\b(?:il y a\s+)?(?:un|une|deux|trois|quelques)\s+(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)\b/iu,
-      /(?:منذ\s*)?\d+\s*(?:ثانية|ثواني?|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|اسبوع|أسابيع|شهر|أشهر|سنة|سنوات)/u,
-      /(?:à l'instant|اليوم|أمس|الآن)/iu
+      // French short forms ("6 j", "13 h") and English single letters ("2 d") share the same
+      // shapes, so one combined list covers both before the long English word forms.
+      // \\b is ASCII-only, so it treats the "d" in "2 días" as a word end and exports a post
+      // age for a Spanish label. A Unicode letter/digit lookahead is the correct boundary.
+      /\b\d+\s*(?:s|m|h|d|w|y|mo|yr|min|hr|hrs|wk|wks|yrs?|j|sem)(?![\p{L}\p{N}])/iu,
+      /\b(?:a|an|one|two|three|four|five|ten|few|several|\d+)\s+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|wk|months?|years?|yrs?)(?![\p{L}\p{N}])/iu,
+      /\b(?:il y a\s+)?\d+\s*(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)(?![\p{L}\p{N}])/iu,
+      /\b(?:il y a\s+)?(?:un|une|deux|trois|quelques)\s+(?:secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|ann[ée]es?)(?![\p{L}\p{N}])/iu,
+      /(?:à l'instant)/iu
     ];
     for (const pattern of patterns) {
       const match = text.match(pattern);
@@ -648,23 +707,30 @@
     return null;
   }
 
+  // Unit table for English and French only. Each entry is matched against the whole unit
+  // token, never as a prefix: "6 j" is days while "1 mois" is a month, and a prefix test
+  // read "mois" as "m" (minutes) and "j" as nothing at all.
+  const AGE_UNITS = [
+    [["s", "sec", "secs", "second", "seconds", "seconde", "secondes"], 1],
+    [["m", "min", "mins", "minute", "minutes"], 60],
+    [["h", "hr", "hrs", "hour", "hours", "heure", "heures"], 3_600],
+    [["d", "day", "days", "jour", "jours", "j"], 86_400],
+    [["w", "wk", "wks", "week", "weeks", "sem", "semaine", "semaines"], 604_800],
+    [["mo", "month", "months", "mois"], 2_592_000],
+    [["y", "yr", "yrs", "year", "years", "an", "ans", "année", "années"], 31_536_000]
+  ].map(([tokens, seconds]) => [new Set(tokens), seconds]);
+
   function parseApproxAgeSeconds(label) {
     if (!label) return null;
     const normalized = classifier.normalizeText(asciiDigits(label));
-    if (/just now|a few seconds|a l instant|maintenant|الان|اليوم/u.test(normalized)) return 0;
-    if (/yesterday|hier|امس/u.test(normalized)) return 86_400;
+    if (/just now|a few seconds|a l instant|maintenant/u.test(normalized)) return 0;
+    if (/yesterday|hier/u.test(normalized)) return 86_400;
 
-    const numberMatch = normalized.match(/(?:il y a\s*|منذ\s*)?(\d+|un|une|a|an)\s*(.*)/u);
+    const numberMatch = normalized.match(/(?:il y a\s*)?(\d+|un|une|a|an)\s+(\S+)/u);
     if (!numberMatch) return null;
     const amount = /^\d+$/u.test(numberMatch[1]) ? Number(numberMatch[1]) : 1;
     const unit = numberMatch[2];
-    if (/^(?:s|sec|secs|second|seconds|seconde|secondes|ثانية|ثوان)/u.test(unit)) return amount;
-    if (/^(?:m|min|mins|minute|minutes|دقيقة|دقائق)/u.test(unit)) return amount * 60;
-    if (/^(?:h|hr|hrs|hour|hours|heure|heures|ساعة|ساعات)/u.test(unit)) return amount * 3600;
-    if (/^(?:d|day|days|jour|jours|يوم|أيام)/u.test(unit)) return amount * 86_400;
-    if (/^(?:w|wk|wks|week|weeks|semaine|semaines|أسبوع|أسابيع)/u.test(unit)) return amount * 604_800;
-    if (/^(?:mo|month|months|mois|شهر|أشهر)/u.test(unit)) return amount * 2_592_000;
-    if (/^(?:y|yr|yrs|year|years|an|ans|année|années|سنة|سنوات)/u.test(unit)) return amount * 31_536_000;
+    for (const [tokens, seconds] of AGE_UNITS) if (tokens.has(unit)) return amount * seconds;
     return null;
   }
 
@@ -938,7 +1004,7 @@
     isCardClassToken, isLikelyPostRoot, findPostRoot, findPostRootsInScope, deduplicateNestedRoots,
     collectPostRoots, POST_URN_PATTERN, ACTOR_SELECTOR, ACTOR_NAME_SELECTOR, isActorContainer,
     urnIn, postIdentityOf, urnFromHrefs, urnFromDescendants, resolveContentScope, belongsToPostRoot,
-    findSeeMore, findBodyNode, cleanText, CHROME_SELECTORS, SPONSORED_PATTERN, isSponsoredCard,
+    findSeeMore, findBodyNode, isVisuallyClamped, cleanText, CHROME_SELECTORS, SPONSORED_PATTERN, isSponsoredCard, isSponsoredText,
     visibleText, nodeText, getPostTextDetails, getHrefs, getStableId, extractJobTitleCandidates,
     extractHashtags, toAbsoluteHttpUrl, extractPostLinks, extractPostEmails, getPostPermalink, permalinkForUrn,
     getAuthorDetails, asciiDigits, ABSOLUTE_DATE_PATTERNS, parseAbsoluteDateMs, findAgeLabel,

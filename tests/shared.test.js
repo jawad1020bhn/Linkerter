@@ -37,14 +37,64 @@ test("sanitizeHiringPreferences treats a legacy keepHistory flag as persistent m
   assert.equal(shared.sanitizeHiringPreferences({ historyRetentionDays: 12 }).historyRetentionDays, 30);
 });
 
-test("parseLinkedInUrl only accepts https LinkedIn feed URLs", () => {
-  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/feed/").isFeed, true);
-  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/").isFeed, true);
-  assert.equal(shared.parseLinkedInUrl("https://linkedin.com/feed").isFeed, true);
-  assert.equal(shared.parseLinkedInUrl("http://www.linkedin.com/feed").isFeed, false);
-  assert.equal(shared.parseLinkedInUrl("https://evil.example/feed").isFeed, false);
-  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/jobs/").isFeed, false);
-  assert.equal(shared.parseLinkedInUrl("not a url").isFeed, false);
+test("parseLinkedInUrl accepts https LinkedIn post surfaces only", () => {
+  // Feed and search results both serve post cards, so both are supported surfaces.
+  for (const url of [
+    "https://www.linkedin.com/",
+    "https://www.linkedin.com/feed/",
+    "https://linkedin.com/feed",
+    "https://www.linkedin.com/feed/update/urn:li:activity:1/",
+    "https://www.linkedin.com/search/results/content/?keywords=dev",
+    "https://www.linkedin.com/search/results/people/?keywords=dev",
+    "https://www.linkedin.com/search/results/all/"
+  ]) {
+    const parsed = shared.parseLinkedInUrl(url);
+    assert.equal(parsed.supportsPosts, true, url);
+    assert.equal(parsed.isFeed, true, url);
+  }
+  for (const url of [
+    "http://www.linkedin.com/feed",
+    "https://evil.example/feed",
+    "https://www.linkedin.com/jobs/",
+    "https://www.linkedin.com/in/someone/",
+    "https://www.linkedin.com/notifications/",
+    "not a url"
+  ]) {
+    const parsed = shared.parseLinkedInUrl(url);
+    assert.equal(parsed.supportsPosts, false, url);
+    assert.equal(parsed.isFeed, false, url);
+  }
+});
+
+test("parseLinkedInUrl names the surface it matched", () => {
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/feed/").surface, "feed");
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/").surface, "feed");
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/search/results/content/").surface, "search");
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/jobs/").surface, null);
+});
+
+// A manifest that declares fewer pages than the parser accepts leaves real posts unreadable
+// (the scripts simply never load). A manifest that declares more exposes tabs the code then
+// refuses. Both are silent failures, so the two lists are pinned to each other here.
+test("the manifest match patterns agree with the URL parser", () => {
+  const manifest = require("../manifest.json");
+  const patterns = manifest.content_scripts.flatMap((entry) => entry.matches || []);
+  const globToRegExp = (glob) => new RegExp(`^${glob.replace(/[.]/g, "\\.").replace(/\*/g, ".*")}$`);
+  const matched = patterns.map(globToRegExp);
+  const declared = (url) => matched.some((pattern) => pattern.test(url));
+  for (const url of [
+    "https://www.linkedin.com/",
+    "https://www.linkedin.com/feed",
+    "https://www.linkedin.com/feed/",
+    "https://www.linkedin.com/search/results/content/?keywords=dev",
+    "https://www.linkedin.com/search/results/people/"
+  ]) {
+    assert.equal(declared(url), true, `manifest does not cover ${url}`);
+    assert.equal(shared.parseLinkedInUrl(url).supportsPosts, true, `parser rejects ${url}`);
+  }
+  for (const url of ["https://www.linkedin.com/jobs/"]) {
+    assert.equal(shared.parseLinkedInUrl(url).supportsPosts, false, url);
+  }
 });
 
 test("canonicalizeLinkedInUrl strips tracking parameters but keeps the update URN", () => {
@@ -116,6 +166,32 @@ test("mergePostRecords keeps partial text as partial and takes the longer body",
   assert.equal(merged.fullText, "a much longer partial body");
   assert.equal(merged.contentComplete, false);
   assert.equal(merged.extractionStatus, "partial");
+});
+
+// A post that was an opening and is later re-read as closed must not mutate silently in
+// the history: the change is recorded so an export can explain why the verdict moved.
+test("mergePostRecords records a verdict change in classificationHistory", () => {
+  const previous = {
+    id: "urn:1", category: "open_role", confidence: "strong",
+    firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-02T00:00:00.000Z"
+  };
+  const next = {
+    id: "urn:1", category: "closed", confidence: "likely",
+    firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-09T00:00:00.000Z"
+  };
+  const merged = shared.mergePostRecords(previous, next);
+  assert.equal(merged.category, "closed");
+  assert.deepEqual(merged.classificationHistory.map((entry) => entry.category), ["open_role", "closed"]);
+  assert.equal(merged.classificationHistory[0].at, "2026-01-02T00:00:00.000Z");
+  assert.equal(merged.classificationHistory[1].at, "2026-01-09T00:00:00.000Z");
+});
+
+test("mergePostRecords does not grow classificationHistory on an unchanged verdict", () => {
+  const merged = shared.mergePostRecords(
+    { id: "urn:1", category: "open_role", confidence: "strong", lastSeenAt: "2026-01-01T00:00:00.000Z" },
+    { id: "urn:1", category: "open_role", confidence: "strong", lastSeenAt: "2026-01-02T00:00:00.000Z" }
+  );
+  assert.equal(Object.hasOwn(merged, "classificationHistory"), false);
 });
 
 test("pruneHistory drops expired records only when retention is enabled", () => {
