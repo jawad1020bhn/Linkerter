@@ -1,7 +1,7 @@
 <!DOCTYPE html><html lang="en"><head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Linkerter – Adaptive LinkedIn Feed</title>
+  <title>Linkerter – Adaptive LinkedIn</title>
   <link rel="stylesheet" href="popup.css">
 </head><body>
   <!-- ── Masthead: identity + live instruments, always visible ────── -->
@@ -22,12 +22,12 @@
         <span id="stateLabel" class="state-label" data-i18n="scroll.ready">Ready</span>
       </span>
       <span id="modeTag" class="mode-tag" data-i18n="mode.standard">Adaptive Standard</span>
-      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">No feed selected</span>
+      <span id="targetBadge" class="target-badge" data-i18n="target.noFeed">No page selected</span>
     </section>
     <div class="progress-track" role="progressbar" aria-label="Scroll-step limit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="scroll.progress">
       <div id="progressFill" class="progress-fill"></div>
     </div>
-    <p id="statusDetail" class="status-detail" data-i18n="scroll.statusReady">Ready to scroll the LinkedIn feed.</p>
+    <p id="statusDetail" class="status-detail" data-i18n="scroll.statusReady">Ready to scroll LinkedIn posts.</p>
   </header>
 
   <!-- ── Tab strip: horizontal destinations ───────────────────────── -->
@@ -66,12 +66,12 @@
 
   <!-- ── Workspace: the active task owns everything below the strip ── -->
   <main class="workspace">
-    <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed to begin.</p>
+    <p id="globalNotice" class="global-notice" role="status" data-i18n="notice.initial">Open the LinkedIn feed or search results to begin.</p>
 
     <!-- First-run, local-privacy explainer (dismissed once) -->
     <section id="onboarding" class="onboarding" aria-labelledby="onboardingTitle">
       <h2 id="onboardingTitle" data-i18n="onboarding.title">Local, user-controlled assistance</h2>
-      <p data-i18n="onboarding.body">Linkerter scrolls and analyzes only the selected feed. It does not like, comment, connect, message, upload posts, or use an external AI service.</p>
+      <p data-i18n="onboarding.body">Linkerter scrolls and analyzes only the selected LinkedIn page (feed or search results). It does not like, comment, connect, message, upload posts, or use an external AI service.</p>
       <p data-i18n="onboarding.control">You choose the pace, limits, history mode, and exports. Hidden-tab work may be throttled by Chrome.</p>
       <p data-i18n="onboarding.policy">Use responsibly and follow LinkedIn’s applicable terms. Review detections before acting on them.</p>
       <button id="onboardingDismiss" class="button button-secondary" type="button" data-i18n="onboarding.dismiss">Got it</button>
@@ -80,10 +80,10 @@
     <!-- Pane: run the scroller ─────────────────────────────────────── -->
     <section id="scrollView" class="view active" role="tabpanel" aria-labelledby="scrollTab">
       <section class="target-block" aria-label="Monitored LinkedIn tab" data-i18n-aria-label="target.section">
-        <p id="targetDetail" class="target-detail" data-i18n="target.detail">Choose a LinkedIn feed tab. The selected target is remembered when you reopen this popup.</p>
+        <p id="targetDetail" class="target-detail" data-i18n="target.detail">Choose a LinkedIn feed or search results tab. The selected target is remembered when you reopen this popup.</p>
         <div class="target-actions">
-          <button id="useActiveFeedBtn" class="button button-secondary" type="button" data-i18n="target.useActive">Use active feed tab</button>
-          <button id="returnToFeedBtn" class="button button-ghost" type="button" disabled="" data-i18n="target.return">Return to feed</button>
+          <button id="useActiveFeedBtn" class="button button-secondary" type="button" data-i18n="target.useActive">Use active LinkedIn tab</button>
+          <button id="returnToFeedBtn" class="button button-ghost" type="button" disabled="" data-i18n="target.return">Return to tab</button>
         </div>
       </section>
 
@@ -116,10 +116,10 @@
           </div>
           <span class="local-badge" data-i18n="detector.badge">NO AI</span>
         </div>
-        <p class="detector-copy" data-i18n="detector.copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French and Arabic while it is in the background. Chrome may throttle hidden tabs, and the feed tab must stay open.</p>
+        <p class="detector-copy" data-i18n="detector.copy">The selected LinkedIn tab keeps scrolling and scanning posts in English, French and Arabic while it is in the background. Chrome may throttle hidden tabs, and the page must stay open.</p>
         <button id="monitorBtn" class="button button-monitor" type="button" disabled="" data-i18n="monitor.start">Start hiring monitor</button>
         <p id="monitorStatus" class="monitor-status" role="status" data-i18n="monitor.off">Monitor is off.</p>
-        <p id="domHealthStatus" class="dom-health" role="status" data-i18n="monitor.domPending">Feed DOM check pending.</p>
+        <p id="domHealthStatus" class="dom-health" role="status" data-i18n="monitor.domPending">Post DOM check pending.</p>
         <div class="metric-grid" aria-label="Detected post counts" data-i18n-aria-label="metrics.aria">
           <div class="metric"><strong id="openCount">0</strong><span data-i18n="category.open_role">Openings</span></div>
           <div class="metric"><strong id="recruiterCount">0</strong><span data-i18n="category.recruiter_search">Recruiter searches</span></div>
@@ -254,7 +254,7 @@
               <option value="super_fast" data-i18n="mode.super_fast">Adaptive Super Fast</option>
             </select>
           </div>
-          <p id="modeDescription" class="field-help" data-i18n="pace.description">Adaptive movement and pauses are automatic. The selected feed keeps scrolling in the background; Chrome may throttle hidden tabs.</p>
+          <p id="modeDescription" class="field-help" data-i18n="pace.description">Adaptive movement and pauses are automatic. The selected page keeps scrolling in the background; Chrome may throttle hidden tabs.</p>
         </div>
       </details>
 
@@ -297,7 +297,7 @@
       <details class="settings-group">
         <summary>
           <h3 id="settingsDetectionTitle" data-i18n="settings.detection">Detection</h3>
-          <span class="summary-hint" data-i18n="settings.detectionHelp">How posts are expanded and filtered in the feed.</span>
+          <span class="summary-hint" data-i18n="settings.detectionHelp">How posts are expanded and filtered on the page.</span>
           <span class="summary-chevron" aria-hidden="true"></span>
         </summary>
         <div class="group-body">
@@ -307,7 +307,7 @@
             <span class="switch" aria-hidden="true"></span>
           </label>
           <label class="toggle-row" for="matchesOnly">
-            <span class="toggle-copy"><strong data-i18n="export.matchesOnly">Show selected matches in feed only</strong><small data-i18n="export.matchesOnlyHelp">While monitoring; stop to restore. Uncertain or partial posts stay visible.</small></span>
+            <span class="toggle-copy"><strong data-i18n="export.matchesOnly">Show selected matches on the page only</strong><small data-i18n="export.matchesOnlyHelp">While monitoring; stop to restore. Uncertain or partial posts stay visible.</small></span>
             <input id="matchesOnly" type="checkbox">
             <span class="switch" aria-hidden="true"></span>
           </label>
@@ -411,7 +411,7 @@
     </section>
 
     <footer class="app-footer">
-      <span data-i18n="footer.target">Selected feed stays pinned when you switch tabs</span>
+      <span data-i18n="footer.target">Selected page stays pinned when you switch tabs</span>
       <span data-i18n="footer.local">Local only</span>
     </footer>
   </main>

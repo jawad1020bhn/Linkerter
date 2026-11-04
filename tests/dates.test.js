@@ -126,3 +126,31 @@ test("isSponsoredCard leaves a genuine vacancy card alone", () => {
   assert.equal(extract.isSponsoredCard(fakeCard({ labels: ["Acme Corp", "We are hiring engineers"] })), false);
   assert.equal(extract.isSponsoredCard(fakeCard({ labels: ["مطلوب مهندس للعمل في وهران"] })), false);
 });
+
+// ── Search-results surfaces ─────────────────────────────────────
+// Search result posts reuse LinkedIn's update component under their own wrapper. Treating
+// that wrapper as a BEM child (it contains "__") made every search result invisible.
+
+test("search result card wrappers are card-level tokens", () => {
+  for (const token of [
+    "search-results__update",
+    "search-results__update-wrapper",
+    "feed-shared-update-v2",
+    "occludable-update",
+    "search-update",
+    "post-card"
+  ]) {
+    assert.equal(extract.isCardClassToken(token), true, token);
+  }
+});
+
+test("BEM children of a card are never treated as cards", () => {
+  for (const token of [
+    "search-results__update__content",
+    "feed-shared-update-v2__description-wrapper",
+    "feed-shared-update-v2__actor",
+    "entity-result"
+  ]) {
+    assert.equal(extract.isCardClassToken(token), false, token);
+  }
+});

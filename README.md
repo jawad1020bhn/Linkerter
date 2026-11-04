@@ -4,12 +4,21 @@
 > `linkedin-feed-scroller` (the project's original name); the product has since
 > been renamed to Linkerter. Both names refer to this extension.
 
-A zero-dependency Chrome MV3 extension that scrolls the LinkedIn feed at a
+A zero-dependency Chrome MV3 extension that scrolls LinkedIn at a
 human-comfortable pace and, while it does, classifies posts locally for hiring
 signals (openings, recruiter searches, job seekers, closed positions) in
 English, French and Arabic. Everything is processed
 and stored on-device: no remote code, no telemetry, no network calls beyond the
 tab the user is viewing.
+
+Supported pages:
+
+- **The home feed and feed views** (`/`, `/feed`, `/feed/*`).
+- **Search results** (`/search/results/*`): people, companies and content results carry the
+  same post cards, so the monitor reads them too.
+- **Not** `/jobs` or any other LinkedIn surface. Those are refused rather than half-working;
+  the manifest, the URL parser and the popup all agree on the same list, and a test pins them
+  to each other.
 
 Detection scope is deliberately narrow:
 
@@ -31,7 +40,7 @@ Detection scope is deliberately narrow:
 | --- | --- |
 | `manifest.json` | MV3 manifest (`activeTab`, `scripting`, `storage`) |
 | `core/linkedin-shared.js` | Shared primitives: URL canonicalization, history pruning limits, sanitizers |
-| `core/linkedin-hiring-rules.js` | Multilingual keyword/phrase tables for the classifier |
+| `core/linkedin-hiring-rules.js` | Keyword/phrase tables for the classifier (en/fr/ar) |
 | `core/linkedin-hiring-classifier.js` | Clause-aware hiring classifier (negation only suppresses its own clause) |
 | `features/feed-monitor/linkedin-post-extract.js` | Pure-DOM post extraction: card boundaries, identity, text, age, metrics |
 | `features/feed-monitor/linkedin-hiring-monitor.js` | Feed scanner orchestration: post roots, expansion, metrics, filtering, export archive |

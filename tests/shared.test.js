@@ -37,14 +37,64 @@ test("sanitizeHiringPreferences treats a legacy keepHistory flag as persistent m
   assert.equal(shared.sanitizeHiringPreferences({ historyRetentionDays: 12 }).historyRetentionDays, 30);
 });
 
-test("parseLinkedInUrl only accepts https LinkedIn feed URLs", () => {
-  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/feed/").isFeed, true);
-  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/").isFeed, true);
-  assert.equal(shared.parseLinkedInUrl("https://linkedin.com/feed").isFeed, true);
-  assert.equal(shared.parseLinkedInUrl("http://www.linkedin.com/feed").isFeed, false);
-  assert.equal(shared.parseLinkedInUrl("https://evil.example/feed").isFeed, false);
-  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/jobs/").isFeed, false);
-  assert.equal(shared.parseLinkedInUrl("not a url").isFeed, false);
+test("parseLinkedInUrl accepts https LinkedIn post surfaces only", () => {
+  // Feed and search results both serve post cards, so both are supported surfaces.
+  for (const url of [
+    "https://www.linkedin.com/",
+    "https://www.linkedin.com/feed/",
+    "https://linkedin.com/feed",
+    "https://www.linkedin.com/feed/update/urn:li:activity:1/",
+    "https://www.linkedin.com/search/results/content/?keywords=dev",
+    "https://www.linkedin.com/search/results/people/?keywords=dev",
+    "https://www.linkedin.com/search/results/all/"
+  ]) {
+    const parsed = shared.parseLinkedInUrl(url);
+    assert.equal(parsed.supportsPosts, true, url);
+    assert.equal(parsed.isFeed, true, url);
+  }
+  for (const url of [
+    "http://www.linkedin.com/feed",
+    "https://evil.example/feed",
+    "https://www.linkedin.com/jobs/",
+    "https://www.linkedin.com/in/someone/",
+    "https://www.linkedin.com/notifications/",
+    "not a url"
+  ]) {
+    const parsed = shared.parseLinkedInUrl(url);
+    assert.equal(parsed.supportsPosts, false, url);
+    assert.equal(parsed.isFeed, false, url);
+  }
+});
+
+test("parseLinkedInUrl names the surface it matched", () => {
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/feed/").surface, "feed");
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/").surface, "feed");
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/search/results/content/").surface, "search");
+  assert.equal(shared.parseLinkedInUrl("https://www.linkedin.com/jobs/").surface, null);
+});
+
+// A manifest that declares fewer pages than the parser accepts leaves real posts unreadable
+// (the scripts simply never load). A manifest that declares more exposes tabs the code then
+// refuses. Both are silent failures, so the two lists are pinned to each other here.
+test("the manifest match patterns agree with the URL parser", () => {
+  const manifest = require("../manifest.json");
+  const patterns = manifest.content_scripts.flatMap((entry) => entry.matches || []);
+  const globToRegExp = (glob) => new RegExp(`^${glob.replace(/[.]/g, "\\.").replace(/\*/g, ".*")}$`);
+  const matched = patterns.map(globToRegExp);
+  const declared = (url) => matched.some((pattern) => pattern.test(url));
+  for (const url of [
+    "https://www.linkedin.com/",
+    "https://www.linkedin.com/feed",
+    "https://www.linkedin.com/feed/",
+    "https://www.linkedin.com/search/results/content/?keywords=dev",
+    "https://www.linkedin.com/search/results/people/"
+  ]) {
+    assert.equal(declared(url), true, `manifest does not cover ${url}`);
+    assert.equal(shared.parseLinkedInUrl(url).supportsPosts, true, `parser rejects ${url}`);
+  }
+  for (const url of ["https://www.linkedin.com/jobs/"]) {
+    assert.equal(shared.parseLinkedInUrl(url).supportsPosts, false, url);
+  }
 });
 
 test("canonicalizeLinkedInUrl strips tracking parameters but keeps the update URN", () => {

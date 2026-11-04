@@ -409,15 +409,15 @@ function createHistoryCoordinator({ chromeApi = globalThis.chrome, now = () => D
 }
 
 /*
- * SPA feed injection fallback.
+ * SPA injection fallback.
  *
- * LinkedIn is a single-page application: a client-side navigation to /feed never
- * reloads the document, so the manifest-declared content scripts are injected only
- * on a true navigation. When a tab's URL becomes a feed URL but nothing answers a
- * GET_STATUS probe, wait a beat for a concurrent manifest injection (document_idle
- * runs after this event) and otherwise inject the same file list with
- * chrome.scripting. Every content module has a re-entrancy guard, so a late
- * manifest injection cannot duplicate listeners.
+ * LinkedIn is a single-page application: a client-side navigation to /feed or to
+ * /search/results never reloads the document, so the manifest-declared content scripts are
+ * injected only on a true navigation. When a tab's URL becomes a supported post surface but
+ * nothing answers a GET_STATUS probe, wait a beat for a concurrent manifest injection
+ * (document_idle runs after this event) and otherwise inject the same file list with
+ * chrome.scripting. Every content module has a re-entrancy guard, so a late manifest
+ * injection cannot duplicate listeners.
  */
 // Keep this list identical to manifest.json's content_scripts[0].js, in the same order:
 // linkedin-hiring-rules.js throws when core/sha256.js has not run first, and the injector
@@ -443,9 +443,11 @@ function createSpaFeedInjector(options = {}) {
     return { register() {}, onTabUpdated() {}, probe() {} };
   }
 
-  function isFeed(url) {
+  // Feed or search results. The wire field is still called `isFeed`, but the question is
+  // "is this a page we can read posts from?".
+  function isPostSurface(url) {
     try {
-      return Boolean(shared.parseLinkedInUrl(url).isFeed);
+      return Boolean(shared.parseLinkedInUrl(url).supportsPosts);
     } catch (_error) {
       return false;
     }
@@ -462,7 +464,7 @@ function createSpaFeedInjector(options = {}) {
 
   async function onTabUpdated(tabId, changeInfo, tab) {
     const url = (changeInfo && changeInfo.url) || (tab && tab.url) || "";
-    if (!isFeed(url) || inFlight.has(tabId)) return;
+    if (!isPostSurface(url) || inFlight.has(tabId)) return;
     inFlight.add(tabId);
     try {
       let connected = await probe(tabId);
@@ -493,9 +495,9 @@ function createSpaFeedInjector(options = {}) {
  * Keyboard commands.
  *
  * `_execute_action` is handled by Chrome itself (it opens the popup and never reaches
- * onCommand). The other two commands act on whichever LinkedIn feed tab is active when
- * the shortcut fires, and reuse the popup's message protocol so a shortcut can never
- * start a monitor with options the UI would not have used.
+ * onCommand). The other two commands act on whichever LinkedIn post surface (feed or search
+ * results) is active when the shortcut fires, and reuse the popup's message protocol so a
+ * shortcut can never start a monitor with options the UI would not have used.
  */
 function createCommandRouter(options = {}) {
   const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
@@ -505,11 +507,11 @@ function createCommandRouter(options = {}) {
     return { COMMANDS, onCommand: async () => ({ ok: false, error: "unavailable" }), register() {} };
   }
 
-  async function activeFeedTab() {
+  async function activePostSurfaceTab() {
     const tabs = await chromeApi.tabs.query({ active: true, lastFocusedWindow: true });
     const tab = tabs && tabs[0];
     if (!tab || !Number.isInteger(tab.id)) return null;
-    return shared.parseLinkedInUrl(tab.url || "").isFeed ? tab : null;
+    return shared.parseLinkedInUrl(tab.url || "").supportsPosts ? tab : null;
   }
 
   async function send(tabId, message) {
@@ -535,7 +537,7 @@ function createCommandRouter(options = {}) {
 
   async function onCommand(command) {
     if (!COMMANDS.includes(command)) return { ok: false, error: "unknown_command" };
-    const tab = await activeFeedTab();
+    const tab = await activePostSurfaceTab();
     if (!tab) return { ok: false, error: "open_feed" };
     if (command === "toggle-monitor") {
       const status = await send(tab.id, { type: SHARED_MESSAGE_TYPES.HIRING.GET_STATUS, query: {} });

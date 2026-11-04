@@ -19,8 +19,15 @@
     return shared.sanitizeSettings(raw);
   }
 
-  function isFeedPage() {
-    return shared.parseLinkedInUrl(location.href).isFeed;
+  // The scroller runs on any post surface (feed or search results). A single-page route
+  // change between them used to stop the session; it now keeps running because both pages
+  // scroll the same way.
+  function isPostSurface() {
+    return shared.parseLinkedInUrl(location.href).supportsPosts;
+  }
+
+  function currentSurface() {
+    return shared.parseLinkedInUrl(location.href).surface;
   }
 
   function elapsedMs(current) {
@@ -32,11 +39,12 @@
 
   function getStatus() {
     if (!session) {
-      return { supported: true, isFeed: isFeedPage(), state: "stopped", reason: "", steps: 0, maxSteps: 0, elapsedMs: 0, maxMs: 0, mode: "" };
+      return { supported: true, isFeed: isPostSurface(), surface: currentSurface(), state: "stopped", reason: "", steps: 0, maxSteps: 0, elapsedMs: 0, maxMs: 0, mode: "" };
     }
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       state: session.state,
       reason: session.reason || "",
       steps: session.steps,
@@ -88,7 +96,7 @@
   }
 
   function startSession(rawSettings) {
-    if (!isFeedPage()) return { ok: false, error: "open_feed", message: "Open the LinkedIn feed before starting." };
+    if (!isPostSurface()) return { ok: false, error: "open_surface", message: "Open a LinkedIn feed or search results page before starting." };
     if (session && session.state === "running") return { ok: true, status: getStatus() };
     if (session && session.state === "paused") {
       resumeSession();
@@ -207,8 +215,13 @@
 
     const candidates = [];
     const documentTarget = { kind: "document", element: root };
+    // The document used to carry a 1e12 score, so it won every time the page could scroll at
+    // all and a feed/search list living in its own scroll container was never used. It keeps
+    // a strong preference (the document is the right answer on most layouts) but a real
+    // post container can now outrank it.
+    const DOCUMENT_SCORE = 900_000;
     if (targetMaxScroll(documentTarget) - targetTop(documentTarget) > 2 && (!session || !session.failedTargets.has(root))) {
-      candidates.push({ target: documentTarget, score: 1e12 });
+      candidates.push({ target: documentTarget, score: DOCUMENT_SCORE });
     }
 
     const body = document.body;
@@ -226,7 +239,8 @@
         const overflow = style.overflowY || "";
         const className = typeof element.className === "string" ? element.className.toLowerCase() : "";
         const role = (element.getAttribute("role") || "").toLowerCase();
-        const semanticFeed = /feed|scaffold|update|finite-scroll/.test(className) || role === "feed" || role === "main" || element.tagName === "MAIN";
+        const semanticFeed = /feed|scaffold|update|finite-scroll|search-results|search-result/.test(className) ||
+          role === "feed" || role === "main" || element.tagName === "MAIN";
         const explicitlyScrollable = /auto|scroll|overlay/.test(overflow) || (overflow === "hidden" && semanticFeed);
         if (!explicitlyScrollable) continue;
 
@@ -236,7 +250,10 @@
         if (visibleWidth < Math.min(210, viewportWidth * 0.42) || visibleHeight < Math.min(150, viewportHeight * 0.3)) continue;
         const area = visibleWidth * visibleHeight;
         const centerDistance = Math.abs((rect.left + rect.width / 2) - viewportWidth / 2) / viewportWidth;
-        const score = area + (semanticFeed ? 450000 : 0) - centerDistance * 130000;
+        // A large, centred, post-shaped container should beat the implicit "scroll the whole
+        // document" default; a small sidebar scroller should not.
+        const heightRatio = Math.min(1, visibleHeight / Math.max(1, viewportHeight));
+        const score = area + (semanticFeed ? 450000 : 0) + heightRatio * 500000 - centerDistance * 130000;
         candidates.push({ target: { kind: "element", element }, score });
       }
     }
@@ -478,8 +495,8 @@
     while (isCurrent(id)) {
       if (session.state === "paused" && !(await waitUntilRunning(id))) return;
       if (!isCurrent(id)) return;
-      if (!isFeedPage()) {
-        stopSession("Stopped because you left the LinkedIn feed.");
+      if (!isPostSurface()) {
+        stopSession("Stopped because you left the LinkedIn feed and search results.");
         return;
       }
       // Do not gate on document.visibilityState: the selected LinkedIn tab keeps scrolling
@@ -499,7 +516,7 @@
       if (!target) {
         session.noMovementCount += 1;
         if (session.noMovementCount >= 4) {
-          stopSession("Stopped: no scrollable feed area was found. Refresh LinkedIn and try again.");
+          stopSession("Stopped: no scrollable post area was found. Refresh LinkedIn and try again.");
           return;
         }
         await waitWhileActive(Math.min(900, timeRemaining), id);
@@ -528,7 +545,7 @@
         session.failedTargets.clear();
       }
       if (session.noMovementCount >= 4) {
-        stopSession("Stopped: no feed movement was detected. You may be at the end, or LinkedIn may need a refresh.");
+        stopSession("Stopped: no post movement was detected. You may be at the end, or LinkedIn may need a refresh.");
         return;
       }
       if (session.steps >= session.settings.maxSteps) {
@@ -573,7 +590,8 @@
 
   const scrollerApi = {
     sanitizeSettings,
-    isFeedPage,
+    isPostSurface,
+    currentSurface,
     getStatus,
     startSession,
     pauseSession,
@@ -601,8 +619,8 @@
         sendResponse({ ok: true, status: getStatus() });
         return false;
       case shared.MESSAGE_TYPES.SCROLL.RESUME:
-        if (!isFeedPage()) {
-          sendResponse({ ok: false, error: "open_feed", message: "Open the LinkedIn feed before resuming." });
+        if (!isPostSurface()) {
+          sendResponse({ ok: false, error: "open_surface", message: "Open a LinkedIn feed or search results page before resuming." });
           return false;
         }
         resumeSession();

@@ -74,10 +74,22 @@
   // (`__description-wrapper`, `__content`, `__actor`, `__social-actions`) are parts of that
   // card. Treating them as cards made one post produce several roots, several archive
   // records, and inflated category counts.
+  // Card-level classes only. Search results reuse LinkedIn's update component under their own
+  // wrapper (`search-results__update`), so both families are matched here.
+  //
+  // The `__` guard keeps BEM *children* (`feed-shared-update-v2__description-wrapper`) from
+  // counting as cards. `search-results__update` is itself the wrapper, not a child, so that
+  // exact name is matched before the guard runs — treating it as a child made every search
+  // result invisible.
+  const SEARCH_CARD_TOKENS = Object.freeze(["search-results__update", "search-results__update-wrapper"]);
+
   function isCardClassToken(token) {
-    if (!token || token.includes("__")) return false;
+    if (!token) return false;
+    if (SEARCH_CARD_TOKENS.includes(token)) return true;
+    if (token.includes("__")) return false;
     return token === "feed-shared-update-v2" || token === "occludable-update" ||
-      /feed[-\w]*(?:update|post)|(?:post|update)[-\w]*card|card[-\w]*(?:post|update)/.test(token);
+      /feed[-\w]*(?:update|post)|(?:post|update)[-\w]*card|card[-\w]*(?:post|update)/.test(token) ||
+      /search[-\w]*(?:update|post)|(?:update|post)[-\w]*search/.test(token);
   }
 
   function isLikelyPostRoot(element) {
@@ -92,7 +104,11 @@
     const postUrn = /urn:li:(activity|share|ugcpost):/i.test(urn) || /urn:li:(activity|share|ugcpost):/i.test(dataId);
     const feedView = /feed.*(update|post)|(update|post).*feed/.test(viewName);
     const feedTestId = /feed.*(update|post)|(update|post).*feed/.test(testId);
-    return element.tagName === "ARTICLE" || role === "article" || knownCardClass || postUrn || feedView || feedTestId || isFeedListItem(element);
+    // Search results carry the same post component but their own view/test identifiers.
+    const searchView = /search.*(update|post|result)|(update|post).*search/.test(viewName);
+    const searchTestId = /search.*(update|post|result)|(update|post).*search/.test(testId);
+    return element.tagName === "ARTICLE" || role === "article" || knownCardClass || postUrn ||
+      feedView || feedTestId || searchView || searchTestId || isFeedListItem(element);
   }
 
   function findPostRoot(element) {
@@ -108,9 +124,14 @@
 
   function findPostRootsInScope(scope) {
     if (!scope) return [];
-    const selector = "article,[role='article'],[role='listitem'],[data-urn],[data-id*='urn:li:'],[data-view-name*='feed']," +
-      "[class*='feed-shared-update-v2'],[class*='occludable-update'],[class*='feed-post'],[class*='feed-update']," +
-      "[class*='post-card'],[class*='update-card'],[data-test-id*='feed-update'],[data-test-id*='feed-post']";
+    // One selector list for both surfaces: LinkedIn renders feed and search-results posts with
+    // the same update component, so the candidates are the same; findPostRoot() then validates
+    // each candidate against the card rules above.
+    const selector = "article,[role='article'],[role='listitem'],[data-urn],[data-id*='urn:li:']," +
+      "[data-view-name*='feed'],[data-view-name*='search'],[class*='feed-shared-update-v2']," +
+      "[class*='occludable-update'],[class*='feed-post'],[class*='feed-update']," +
+      "[class*='search-results__update'],[class*='search-update'],[class*='post-card'],[class*='update-card']," +
+      "[data-test-id*='feed-update'],[data-test-id*='feed-post'],[data-test-id*='search-update']";
     const candidates = scope.querySelectorAll(selector);
     const roots = new Set();
     for (const candidate of candidates) {
@@ -123,9 +144,13 @@
   function collectPostRoots() {
     const scope = document.querySelector("[role='main'],main") || document.body;
     const roots = findPostRootsInScope(scope);
-    // LinkedIn sometimes places the feed cards outside its current <main> wrapper.
-    if (!roots.length && scope && scope !== document.body) return findPostRootsInScope(document.body);
-    return roots;
+    if (scope === document.body) return roots;
+    // LinkedIn sometimes places cards outside its current <main> wrapper, and search results
+    // append further pages outside it. The old code only fell back to document.body when
+    // <main> held no cards at all, so a page with some inside and some outside silently lost
+    // the outside ones. Merge both scopes and deduplicate instead.
+    const elsewhere = findPostRootsInScope(document.body).filter((root) => !roots.includes(root));
+    return elsewhere.length ? deduplicateNestedRoots([...roots, ...elsewhere]) : roots;
   }
 
   const POST_URN_PATTERN = /urn:li:(?:activity|share|ugcPost|jobPosting|job):[\w-]+/i;

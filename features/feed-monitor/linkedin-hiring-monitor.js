@@ -113,9 +113,15 @@
   });
   const STALE_OPENING_AGE_DAYS = 60;
 
-  function isFeedPage() {
-    return location.hostname === "www.linkedin.com" &&
-      (location.pathname === "/" || /^\/feed(?:\/|$)/.test(location.pathname));
+  // Post surfaces: the feed and search results. Delegated to the shared URL parser so the
+  // content script, the popup and the service worker cannot disagree about what is
+  // supported. The old local copy hardcoded only "/" and "/feed".
+  function isPostSurface() {
+    return shared.parseLinkedInUrl(location.href).supportsPosts;
+  }
+
+  function currentSurface() {
+    return shared.parseLinkedInUrl(location.href).surface;
   }
 
   function decrementArchiveRootCount(key) {
@@ -188,7 +194,8 @@
     const posts = Array.from(exportRecords.values()).sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       ok: true,
       schemaVersion: shared.SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
@@ -532,7 +539,7 @@
 
   async function scan() {
     if (!monitoring) return;
-    if (!isFeedPage()) {
+    if (!isPostSurface()) {
       await stopMonitor();
       return;
     }
@@ -771,7 +778,8 @@
     const page = queryRecords(archive, { ...query, filter: query.filter || activeFilter });
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       ok: true,
       monitoring,
       autoExpand,
@@ -805,7 +813,12 @@
 
   function startMonitor(options = {}) {
     reconcileFilterArtifacts();
-    if (!isFeedPage()) return { supported: true, isFeed: false, ok: false, error: "open_feed", message: "Open the LinkedIn feed first." };
+    if (!isPostSurface()) {
+      return {
+        supported: true, isFeed: false, surface: null, ok: false,
+        error: "open_surface", message: "Open a LinkedIn feed or search results page first."
+      };
+    }
     const nextFilter = typeof options.filter === "string" ? options.filter : activeFilter;
     const nextMatchesOnly = options.matchesOnly === true;
     if (activeFilter !== nextFilter || matchesOnly !== nextMatchesOnly) restoreHiddenPosts();
@@ -887,7 +900,8 @@
     const flushed = await flushHistoryDelta(true);
     return {
       supported: true,
-      isFeed: isFeedPage(),
+      isFeed: isPostSurface(),
+      surface: currentSurface(),
       ok: flushed?.ok !== false,
       ...(flushed?.ok === false ? { error: flushed.error || "storage_unavailable" } : {}),
       status: getStatus()
@@ -904,7 +918,8 @@
     matchesOnly = nextMatchesOnly;
     if (monitoring && matchesOnly) ensureFilterStyle();
     if (monitoring) scheduleScan(50);
-    return { supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() };
+    return { supported: true, isFeed: isPostSurface(),
+      surface: currentSurface(), ok: true, status: getStatus() };
   }
 
   const monitorApi = {
@@ -968,7 +983,8 @@
         matchesOnly = nextMatchesOnly;
         if (monitoring && matchesOnly) ensureFilterStyle();
         if (monitoring) scheduleScan(50);
-        sendResponse({ supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() });
+        sendResponse({ supported: true, isFeed: isPostSurface(),
+      surface: currentSurface(), ok: true, status: getStatus() });
         return false;
       }
       case shared.MESSAGE_TYPES.HIRING.SET_PIPELINE:
@@ -977,7 +993,8 @@
           baselineAt: message.baselineAt,
           filter: message.filter
         });
-        sendResponse({ supported: true, isFeed: isFeedPage(), ok: true, status: getStatus() });
+        sendResponse({ supported: true, isFeed: isPostSurface(),
+      surface: currentSurface(), ok: true, status: getStatus() });
         return false;
       default:
         return false;
